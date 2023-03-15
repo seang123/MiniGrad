@@ -4,6 +4,8 @@
 /obj/
 /CMakeFiles/
 
+CMakeCache.txt
+
 
 # Prerequisites
 *.d
