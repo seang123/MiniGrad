@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <set>
 
 
 using InitShape = std::initializer_list<int>; //allows braced-list initlization - Tenor t = {1,2,3};
@@ -17,27 +18,27 @@ class Tensor;
 
 class Op{
 public:
+    Tensor* left;
+    Tensor* right;
+    std::set<Tensor*> parents;
+    //std::vector<Tensor*> parents;
+    Op(Tensor*, Tensor*);
+    Op(Tensor*);
+    Op();
     virtual Tensor forward();
     virtual void backward();
 };
 
-class Add : public Op{
-private:
-    Tensor* self_;
-    Tensor* other_;
+class Add_op : public Op{
 public:
-    Add(Tensor* self, Tensor* other);
-    void backward();
+    Tensor* left;
+    Tensor* right;
+    std::set<Tensor*> parents;
+    //std::vector<Tensor*> parents;
+    Add_op(Tensor* left, Tensor* right);
     Tensor forward();
+    void backward();
 };
 
-class Sub : public Op{
-private:
-    const Tensor& lhs;
-    const Tensor& rhs;
-public:
-    Sub(const Tensor& lhs, const Tensor& rhs);
-    void backward();
-};
 
 #endif

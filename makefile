@@ -1,14 +1,14 @@
 
 CXX = g++
 VER = -std=c++17
-LDFLAGS = $(VER) -static #-Wall
+LDFLAGS = $(VER) -static -Wall # -Werror -Wextra
 
 
 
 
 
 
-test: tests.o tensor.o substance.o ops.o
+tests: tests.o tensor.o substance.o ops.o
 	$(CXX) $(LDFLAGS) -o test tests.o tensor.o substance.o ops.o
 
 

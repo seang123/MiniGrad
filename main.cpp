@@ -46,43 +46,10 @@ void basic_test(){
 
 }
 
-class C{
-    int x;
-    bool y = false;
-public:
-    C(int x_){
-        this->x = x_;
-    };
-    void set_y(bool y_){
-        this->y = y_;
-    }
-    bool get_y(){
-        return this->y;
-    }
-    int get_x(){
-        return this->x;
-    }
-};
-
-C nested(){
-    C c(3);
-    //c.set_y(true);
-    return c;
-}
-
-C top(){
-    C c = nested();
-    return c;
-}
-
 
 int main()
 {
-    //basic_test();
-
-    C c = top();
-    std::cout << "x: " << c.get_x() << "\n";
-    std::cout << "y: " << c.get_y() << "\n";
+    basic_test();
 
     return 0;
 }

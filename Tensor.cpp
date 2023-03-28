@@ -12,9 +12,6 @@
 #include "Ops.h"
 
 // ----------------------- Forward declare ----------------------------
-class Add;
-
-
 
 
 
@@ -42,10 +39,19 @@ Tensor::Tensor(std::shared_ptr<Substance> sub) : values(sub){};
 Tensor::Tensor(const Tensor& lhs) = default;
 
 // Move
-Tensor::Tensor(Tensor&& lhs) noexcept : values(lhs.values){};
+Tensor::Tensor(Tensor&& lhs) noexcept 
+    : values(lhs.values)
+    , grad(lhs.grad)
+    , has_ctx(lhs.has_ctx)
+    {
+    has_ctx = lhs.has_ctx;
+    ctx = lhs.ctx;
+    requires_grad_ = lhs.requires_grad_;
+};
 
 // shallow copy
-Tensor& Tensor::operator=(const Tensor& lhs) = default;
+//Tensor& Tensor::operator=(const Tensor& lhs) = default;
+Tensor& Tensor::operator=(const Tensor& lhs) { std::cout << "copy\n"; return *this;}
 
 /** Move
  *  Data is moved from one tensor object to another (efficiently)
@@ -85,7 +91,7 @@ Tensor::Tensor(const Shape& shape, float fill_v, bool req_grad) : Tensor(shape, 
 Tensor::Tensor(std::vector<float> vec, bool req_grad){
     //throw std::runtime_error("Not implemented");
     values = std::make_shared<Substance>(vec.size(), std::vector<int>(vec.size()));
-    for(int i = 0; i < vec.size(); i++){
+    for(size_t i = 0; i < vec.size(); i++){
         values->vals.get()[i] = vec[i];
     }
     this->requires_grad_ = req_grad;
@@ -234,7 +240,7 @@ float& Tensor::operator[](const Index& index) const {
 // ------------- Basic getters & setters --------------
 
 float& Tensor::operator[](const int index){
-    if(index > (values->size - 1)){
+    if((size_t)index > (values->size - 1)){
         throw std::runtime_error("Index out of range.");
     }
     return values->vals.get()[index];
@@ -360,7 +366,7 @@ void ApplyOpSimple(Tensor& dst, const Tensor& lhs, const Tensor& rhs, F op) {
     float* dst_ = dst.id();
     float* lhs_ = lhs.id();
     float* rhs_ = rhs.id();
-    for(int i = 0; i < lhs.size(); i++){
+    for(size_t i = 0; i < lhs.size(); i++){
         //dst_[i] = lhs_[i] + rhs_[i];
         dst_[i] = op(lhs_[i], rhs_[i]);
     }
@@ -371,7 +377,7 @@ inline void ApplyOpSimple(Tensor& ret, const Tensor& src, F op) {
     auto&& ret_data = ret.data();
     auto&& src_data = src.data();
     // Simply apply all
-    for(int i = 0; i < src.size(); i++){
+    for(size_t i = 0; i < src.size(); i++){
         ret_data[i] = op(src_data[i]);
     }
 }
@@ -654,17 +660,29 @@ Tensor operator+(float lhs, const Tensor& rhs){
  * Runs addition operation on two tensors while also setting the context variable for backprop
 */
 Tensor add(Tensor& lhs, Tensor& rhs){
-    lhs.ctx = std::make_shared<Add> (&lhs, &rhs);
-    rhs.ctx = std::make_shared<Add> (&rhs, &lhs);
-    return ApplyDualOp(lhs, rhs, std::plus<float>());
+    Tensor ret = ApplyDualOp(lhs, rhs, std::plus<float>());
+    if(lhs.requires_grad() || rhs.requires_grad()){ 
+        //! Why the fuck does setting gradient to 1 in the ApplyDualOp method not work?
+        //! Although the function is assigning true to requires_grad it doesn't propogate to here
+        //* Because ApplyDualOp does a move operation which currently doesn't keep state info
+        ret.requires_grad(true); 
+        //* The output stores referenecs to the parent tensors as well as what operation produced it
+        //ret.ctx = Add_op(&lhs, &rhs);
+        ret.ctx = std::make_shared<Add_op>(&lhs, &rhs);
+        ret.has_ctx = true;
+    };
+    /*
+    std::cout << "--- add(Tensor&, Tensor&)\n";
+    std::cout << "ret.requires_grad: " << ret.requires_grad() << "\n";
+    std::cout << "ret.has_ctx: " << ret.has_ctx << "\n";
+    std::cout << "add ret.ctx.parents.size: " << ret.ctx.parents.size() << "\n";
+    std::cout << "--------\n";
+    */
+    return ret;
 }
 
 Tensor operator+(Tensor& lhs, Tensor& rhs){
-    Tensor out = add(lhs, rhs);
-    //! Why the fuck does setting gradient to 1 in the ApplyDualOp method not work?
-    //! Although the function is assigning true to requires_grad it doesn't propogate to here
-    out.requires_grad(true);
-    return out;
+    return add(lhs, rhs);
 }
 
 
@@ -838,7 +856,7 @@ template Tensor Tensor::reshape(int, int, int, int, int, int, int, int, int,
  * Topological sort of the operations tree
  * Recursive walk
 */
-void _deepwalk(const Tensor* node, std::set<Tensor> visited, std::vector<Tensor> nodes){
+void _deepwalk(Tensor* node, std::set<Tensor* >& visited, std::vector<Tensor*>& nodes){
     //nodes.push_back(node);
     // if node has ctx
     //      for parent 
@@ -846,22 +864,61 @@ void _deepwalk(const Tensor* node, std::set<Tensor> visited, std::vector<Tensor>
     //              _deepwalk(parent[i], visited, nodes)
     //      nodes.append(node)
     // return nodes 
+    std::cout << "_deepwalk()\n";
+    const bool is_in = visited.find(node) != visited.end();
+    if (!is_in){
+        visited.insert(node);
+        if(node->has_ctx == 1){
+            for(Tensor* n : node->ctx->parents){
+                std::cout << "node\n";
+                _deepwalk(n, visited, nodes);
+            }
+        }
+        nodes.push_back(node);
+    }
 }
+
+struct Graph{
+    std::set<Tensor*>visited;
+    std::vector<Tensor*>nodes;
+};
 
 /**
  * Topological sort of the operations tree
 */
-void Tensor::deepwalk(){
-    std::set<Tensor> visited;
-    std::vector<Tensor> nodes;
+Graph Tensor::deepwalk(){
+    std::cout << "deepwalk()\n";
+    std::set<Tensor*> visited;
+    std::vector<Tensor*> nodes;
     _deepwalk(this, visited, nodes);
+
+    return Graph{
+        visited = visited,
+        nodes = nodes
+    };
 }
 
 /**
  * The backwards method for a tensor
+ * When called -> 
+ *      built ops graph
+ *      compute gradients for each parent
 */
 void Tensor::backward(){
-
+    std::cout << "backward()\n";
     // Initialise the gradient as 1
     //grad = std::make_shared<Tensor>(this->shape(), 1.0f, req_grad=false);
+    this->grad = std::make_shared<Tensor>(this->values->shape, 1.f);
+
+    //* parents = topo_sort()
+    //* for node in parents
+    //* if node.has_grad -> node._backward()
+    Graph g = this->deepwalk();
+
+    for(Tensor* n : g.nodes){
+        if( n->has_ctx == true){
+            n->ctx.get()->backward();
+        }
+    }
+
 }

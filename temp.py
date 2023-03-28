@@ -35,3 +35,14 @@ print(x.grad)
 print(w.grad)
 
 
+print("---------------")
+
+#x = np.random.randint(5, size=(3, 3, 4))
+#w = np.random.randint(5, size=(3, 1, 4))
+
+x = np.random.randint(5, size=(3, 784))
+w = np.random.randint(5, size=(784, 16))
+
+out = x @ w #   3 x 3 x 4
+
+print(out.shape)

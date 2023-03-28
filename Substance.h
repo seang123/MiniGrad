@@ -21,8 +21,8 @@ public:
           vals(new float[size_], std::default_delete<float[]>()){};
     ~Substance();
 
-    size_t size;
     Shape shape;
+    size_t size;
     std::shared_ptr<float> vals; // the raw data array - on the heap
 
 

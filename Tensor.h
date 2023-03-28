@@ -7,6 +7,7 @@
 
 #include "Substance.h"
 #include "Iter.h"
+#include "Ops.h"
 
 using InitShape = std::initializer_list<int>; //allows braced-list initlization - Tenor t = {1,2,3};
 using Shape = std::vector<int>;
@@ -14,6 +15,9 @@ using Index = std::vector<int>;
 
 //class Iter;
 class Op;
+class Add_op;
+class Sub_op;
+struct Graph;
 
 // ----------- Float initialisers ---------------
 template <std::size_t D>
@@ -41,11 +45,6 @@ private:
     std::shared_ptr<Substance> values;
     Tensor(std::shared_ptr<Substance>); // create tensor from substance pointer
 
-    // tensors have gradients, buffers do not
-    // gradients are themselves a tensor
-    //Tensor* grad = nullptr;
-    std::shared_ptr<Tensor> grad;
-    bool requires_grad_ = false;
     
     // Get begin-end of raw data array
     float* begin();
@@ -66,7 +65,15 @@ public:
     Tensor& operator=(Tensor&&);
     ~Tensor();
 
+    // tensors have gradients, buffers do not
+    // gradients are themselves a tensor
+    //Tensor* grad = nullptr;
+    std::shared_ptr<Tensor> grad;
+    bool requires_grad_ = false;
+
     std::shared_ptr<Op> ctx;
+    bool has_ctx = false;
+
     void requires_grad(bool);
     bool requires_grad();
     const bool requires_grad() const;
@@ -119,7 +126,8 @@ public:
 
     // --- backwards ---
     void backward();
-    void deepwalk();
+    //void deepwalk();
+    Graph deepwalk();
 
 
     // Initialise from list

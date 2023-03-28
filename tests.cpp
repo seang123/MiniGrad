@@ -6,6 +6,7 @@
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
+#include "Ops.h"
 
 
 //using std::cout;
@@ -108,8 +109,12 @@ TEST_CASE("gradient accumulation"){
     CHECK(t2.requires_grad() == true);
 
     Tensor t3 = t1 + t2;
-    CHECK(t3.requires_grad() == true);
-
     CHECK(tensor_to_str(t3) == "[[4, 5, 6]]\n");
+    CHECK(t3.requires_grad() == true); // if input requires_grad -> output requires_grad
+    CHECK(t3.has_ctx == 1);
 
+    // backwards pass
+    t3.backward();
+
+    CHECK(t3.ctx->parents.size() == 2);
 }
