@@ -117,4 +117,7 @@ TEST_CASE("gradient accumulation"){
     t3.backward();
 
     CHECK(t3.ctx->parents.size() == 2);
+
+    std::cout << *t1.grad << "\n";
+    std::cout << *t2.grad << "\n";
 }

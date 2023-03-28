@@ -917,7 +917,7 @@ void Tensor::backward(){
 
     for(Tensor* n : g.nodes){
         if( n->has_ctx == true){
-            n->ctx.get()->backward();
+            n->ctx.get()->backward(n->grad);
         }
     }
 

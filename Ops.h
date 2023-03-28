@@ -26,7 +26,7 @@ public:
     Op(Tensor*);
     Op();
     virtual Tensor forward();
-    virtual void backward();
+    virtual void backward(std::shared_ptr<Tensor> );
 };
 
 class Add_op : public Op{
@@ -37,7 +37,7 @@ public:
     //std::vector<Tensor*> parents;
     Add_op(Tensor* left, Tensor* right);
     Tensor forward();
-    void backward();
+    void backward(std::shared_ptr<Tensor> );
 };
 
 

@@ -70,13 +70,13 @@ public:
     //Tensor* grad = nullptr;
     std::shared_ptr<Tensor> grad;
     bool requires_grad_ = false;
-
-    std::shared_ptr<Op> ctx;
-    bool has_ctx = false;
-
     void requires_grad(bool);
     bool requires_grad();
     const bool requires_grad() const;
+
+    // Context - for computing the gradients
+    std::shared_ptr<Op> ctx;
+    bool has_ctx = false;
 
     static Tensor zeros(const Shape& shape); // Zero init tensor - parameter: shape
 
