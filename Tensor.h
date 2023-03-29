@@ -74,6 +74,8 @@ public:
     bool requires_grad();
     const bool requires_grad() const;
 
+    std::string name;
+
     // Context - for computing the gradients
     std::shared_ptr<Op> ctx;
     bool has_ctx = false;

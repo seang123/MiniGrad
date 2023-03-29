@@ -6,6 +6,7 @@
 #include <string>
 #include <sstream>
 #include <set>
+#include <algorithm>
 
 #include "Tensor.h"
 #include "Substance.h"
@@ -36,7 +37,8 @@ Tensor::Tensor() : values(std::make_shared<Substance>()){};
 Tensor::Tensor(std::shared_ptr<Substance> sub) : values(sub){};
 
 // Shallow copy
-Tensor::Tensor(const Tensor& lhs) = default;
+//Tensor::Tensor(const Tensor& lhs) = default;
+Tensor::Tensor(const Tensor& lhs) { std::cout << "shallow copy\n";}
 
 // Move
 Tensor::Tensor(Tensor&& lhs) noexcept 
@@ -870,7 +872,6 @@ void _deepwalk(Tensor* node, std::set<Tensor* >& visited, std::vector<Tensor*>& 
         visited.insert(node);
         if(node->has_ctx == 1){
             for(Tensor* n : node->ctx->parents){
-                std::cout << "node\n";
                 _deepwalk(n, visited, nodes);
             }
         }
@@ -915,10 +916,13 @@ void Tensor::backward(){
     //* if node.has_grad -> node._backward()
     Graph g = this->deepwalk();
 
-    for(Tensor* n : g.nodes){
+    std::reverse(g.nodes.begin(), g.nodes.end());
+
+    for(auto& n : g.nodes){
+    //for(Tensor* n: g.nodes){
         if( n->has_ctx == true){
-            n->ctx.get()->backward(n->grad);
+            std::cout << ">> " << n->name << "\n";
+            n->ctx->backward(n->grad);
         }
     }
-
 }

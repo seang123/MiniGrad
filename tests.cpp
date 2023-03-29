@@ -104,6 +104,8 @@ TEST_CASE("gradient accumulation"){
     Tensor t2 = {3.f, 3.f, 3.f}; // (3,)
     t1.requires_grad(true);
     t2.requires_grad(true);
+    t1.name = "t1";
+    t2.name = "t2";
 
     CHECK(t1.requires_grad() == true);
     CHECK(t2.requires_grad() == true);
@@ -112,12 +114,33 @@ TEST_CASE("gradient accumulation"){
     CHECK(tensor_to_str(t3) == "[[4, 5, 6]]\n");
     CHECK(t3.requires_grad() == true); // if input requires_grad -> output requires_grad
     CHECK(t3.has_ctx == 1);
+    t3.name = "t3";
 
     // backwards pass
+    /*
     t3.backward();
 
     CHECK(t3.ctx->parents.size() == 2);
 
     std::cout << *t1.grad << "\n";
     std::cout << *t2.grad << "\n";
+    */
+
+    Tensor t4 = {{4.f, 44.f, 444.f}};
+    t4.requires_grad(true);
+    t4.name = "t4";
+
+    CHECK(t4.requires_grad() == true);
+    CHECK(t4.has_ctx == false);
+
+    Tensor t5 = t4 + t3;
+    t5.name = "t5";
+    t5.backward();
+
+    CHECK(t5.requires_grad() == true);
+    CHECK(t5.has_ctx == true);
+
+    std::cout << "abc:" << *t1.grad << "\n";
+    std::cout << "def:" << *t2.grad << "\n";
+
 }
