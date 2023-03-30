@@ -84,3 +84,18 @@ void Mul_op::backward(std::shared_ptr<Tensor> out_grad){
 Tensor Mul_op::forward(){
     throw std::runtime_error("Mul_op::forward() -- Not implemented!");
 }
+
+
+// ----------------- tanh ----------------------
+
+tanh_op::tanh_op(Tensor* left){
+    this->left = left;
+    parents.insert(left);
+}
+
+void tanh_op::backward(std::shared_ptr<Tensor> out_grad){
+    if(left->requires_grad()){
+        //left.grad += (1 - t**2) * out.grad
+        left->grad = std::make_shared<Tensor>( 1 - left**2 ) * (*out_grad));
+    }
+}

@@ -53,24 +53,44 @@ def func2():
 
   print("---------------------------")
 
-a = torch.tensor(1.0 * np.random.randint(5, size=(5,)), requires_grad=True)
-b = torch.tensor(1.0 * np.random.randint(5, size=(5,)), requires_grad=True)
-c = torch.tensor(1.0 *np.random.randint(5, size=(5,)), requires_grad=True)
-e = a * b
-d = e + c
-f = -1.0 * np.array([2, 2, 2, 2, 2])
-f = torch.tensor(f, requires_grad=True)
-L = d * f
+def kaparthy_example():
+  a = torch.tensor(1.0 * np.random.randint(5, size=(5,)), requires_grad=True)
+  b = torch.tensor(1.0 * np.random.randint(5, size=(5,)), requires_grad=True)
+  c = torch.tensor(1.0 *np.random.randint(5, size=(5,)), requires_grad=True)
+  e = a * b
+  e.retain_grad()
+  d = e + c
+  d.retain_grad()
+  f = -1.0 * np.array([2, 2, 2, 2, 2])
+  f = torch.tensor(f, requires_grad=True)
+  L = d * f
 
-L.backward(torch.Tensor([1, 1, 1, 1, 1]))
+  L.backward(torch.Tensor([1, 1, 1, 1, 1]))
 
-print("a: ", a)
-print("b: ", b)
-print("c: ", c)
-print("e: ", e)
-print("d: ", d)
-print("L: ", L)
+  print("a: ", a)
+  print("b: ", b)
+  print("c: ", c)
+  print("e: ", e)
+  print("d: ", d)
+  print("L: ", L)
 
-print("-- grad -- ")
-print(f.grad)
+  print("-- grad -- ")
+  print(a.grad)
+  print(b.grad)
+  print(c.grad)
+  print(e.grad)
+  print(d.grad)
+  print(f.grad)
+
+def tanh_exp():
+  t = np.array([-3, -2, -1, 0, 1, 2, 3, 4, 5])
+
+  t = np.tanh(t)
+  print(t)
+
+
+
+
+
+tanh_exp()
 

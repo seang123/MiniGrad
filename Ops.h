@@ -51,5 +51,13 @@ public:
     void backward(std::shared_ptr<Tensor>);
 };
 
+class tanh_op : public Op{
+    Tensor* left;
+    std::set<Tensor*> parents;
+public:
+    tanh_op(Tensor* left);
+    Tensor forward();
+    void backward(std::shared_ptr<Tensor>);
+};
 
 #endif
