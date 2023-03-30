@@ -40,6 +40,19 @@ public:
     void backward(std::shared_ptr<Tensor> );
 };
 
+/**
+ * 
+*/
+class Sub_op : public Op{
+    Tensor* left;
+    Tensor* right;
+    std::set<Tensor*> parents;
+public:
+    Sub_op(Tensor* left, Tensor* right);
+    Tensor forward();
+    void backward(std::shared_ptr<Tensor> );
+};
+
 
 class Mul_op : public Op{
     Tensor* left;
@@ -53,6 +66,7 @@ public:
 
 class tanh_op : public Op{
     Tensor* left;
+    Tensor* right;
     std::set<Tensor*> parents;
 public:
     tanh_op(Tensor* left);

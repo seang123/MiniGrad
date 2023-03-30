@@ -83,6 +83,8 @@ TEST_CASE("tensor addition"){
 
 TEST_CASE("basic operations"){
     std::cout << "-- basic operations\n";
+    Tensor t1 = {-1.f, 1.f, 2.f, 3.f};
+
     SUBCASE("Empty") {
         const Tensor m1;
         CHECK(m1.empty());
@@ -91,11 +93,28 @@ TEST_CASE("basic operations"){
         CHECK(m1.ndim() == 1);
     }
     SUBCASE("Reshape"){
-        Tensor t1 = {{1.f, 2.f, 3.f}};
-        t1 = t1.reshape(3, 1);
-        CHECK(tensor_to_str(t1) == "[[1],\n [2],\n [3]]");
+        //Tensor t1 = {{1.f, 2.f, 3.f}};
+        t1 = t1.reshape(4, 1);
+        //CHECK(tensor_to_str(t1) == "[[1],\n [2],\n [3]]");
+        CHECK(tensor_to_str(t1) == "[[-1],\n [1],\n [2],\n [3]]");
+
     }
-    //CHECK(equality() == Tensor({{1, 2, 3}}));
+
+    SUBCASE("Minus scalar"){
+        Tensor t2 = 1.f - t1;
+        CHECK(tensor_to_str(t2) == "[2, 0, -1, -2]");
+
+        Tensor t3 = t1 - 1.f;
+        CHECK(tensor_to_str(t3) == "[-2, 0, 1, 2]");
+    }
+
+    SUBCASE("Add scalar"){
+        Tensor t2 = 1.f + t1;
+        CHECK(tensor_to_str(t2) == "[0, 2, 3, 4]");
+
+        Tensor t3 = t1 + 1.f;
+        CHECK(tensor_to_str(t3) == "[0, 2, 3, 4]");
+    }
 }
 
 TEST_CASE("gradient accumulation"){
@@ -228,6 +247,11 @@ TEST_CASE("Operations"){
     SUBCASE("exponential "){
         Tensor out = Ops::exp(t1);
         CHECK(tensor_to_str(out) == "[0.367879, 1, 2.71828, 7.38906, 20.0855, 54.5981, 148.413]");
+    }
+
+    SUBCASE("Tensor::square()"){
+        Tensor out = t1.square();
+        CHECK(tensor_to_str(out) == "[1, 0, 1, 4, 9, 16, 25]");
     }
 
 

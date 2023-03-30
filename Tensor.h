@@ -94,6 +94,7 @@ public:
     void add(int);
     Tensor add(const Tensor& lhs, const Tensor& rhs);
 
+    Tensor square();
 
     // Reshape the tensor - dimensions listed in vector
     Tensor reshape(const Shape& shape) const;
@@ -196,9 +197,20 @@ Tensor operator*(const Tensor& lhs, const Tensor& rhs);
 Tensor operator/(const Tensor& lhs, const Tensor& rhs);
 
 Tensor operator+(Tensor& lhs, Tensor& rhs);
+Tensor operator-(Tensor& lhs, Tensor& rhs);
 Tensor operator*(Tensor& lhs, Tensor& rhs);
 Tensor operator*(Tensor& lhs, Tensor& rhs);
 Tensor operator/(Tensor& lhs, Tensor& rhs);
+
+Tensor operator+(float lhs, Tensor& rhs);
+Tensor operator-(float lhs, Tensor& rhs);
+Tensor operator*(float lhs, Tensor& rhs);
+Tensor operator/(float lhs, Tensor& rhs);
+
+Tensor operator+(Tensor& lhs, float rhs);
+Tensor operator-(Tensor& lhs, float rhs);
+Tensor operator*(Tensor& lhs, float rhs);
+Tensor operator/(Tensor& lhs, float rhs);
 
 Tensor operator==(const Tensor lhs, const Tensor& rhs);
 

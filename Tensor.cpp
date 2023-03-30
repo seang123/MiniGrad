@@ -7,6 +7,7 @@
 #include <sstream>
 #include <set>
 #include <algorithm>
+#include <math.h>
 
 #include "Tensor.h"
 #include "Substance.h"
@@ -607,6 +608,10 @@ inline auto WrapOpForIter(F op){
 // -------------------------------- Math operators ----------------------------
 
 template <typename F>
+Tensor ApplySingleOp(const Tensor& lhs, F op){
+}
+
+template <typename F>
 Tensor ApplyDualOp(const Tensor& lhs, const Tensor& rhs, F op) {
     if (lhs.shape() == rhs.shape()) {
         // Apply without broadcast because of same size for speed up.
@@ -630,6 +635,8 @@ Tensor ApplyDualOp(const Tensor& lhs, const Tensor& rhs, F op) {
     }
 }
 
+/* --------- Addition ------------ */
+
 Tensor operator+(const Tensor& lhs, const Tensor& rhs){
     if(lhs.shape() == rhs.shape()){
         Tensor ret(lhs.shape());
@@ -646,13 +653,28 @@ Tensor operator+(const Tensor& lhs, const Tensor& rhs){
     }
 }
 
+/*
 Tensor operator+(const Tensor& lhs, float rhs){
     // Technically operator+(const Tensor&, Tensor&&) but degrades to const lvalue reference
+    // TODO: this is wrong -- rhs.shape should equal lhs.shape
     return lhs + Tensor(Shape({1}), rhs);
 }
 
 Tensor operator+(float lhs, const Tensor& rhs){
+    // TODO: this is wrong -- lhs.shape should equal rhs.shape
     return Tensor(Shape({1}), lhs) + rhs;
+}
+*/
+
+Tensor operator+(float lhs, Tensor& rhs){
+    // Have to do it in 2 steps because I don't currently support rvalue references
+    // Otherwise, could write: return Tensor(lhs) - rhs
+    Tensor lhs_ (rhs.shape(), lhs);
+    return lhs_ + rhs;
+}
+
+Tensor operator+(Tensor& lhs, float rhs){
+    return rhs + lhs;
 }
 
 
@@ -663,22 +685,11 @@ Tensor operator+(float lhs, const Tensor& rhs){
 Tensor add(Tensor& lhs, Tensor& rhs){
     Tensor ret = ApplyDualOp(lhs, rhs, std::plus<float>());
     if(lhs.requires_grad() || rhs.requires_grad()){ 
-        //! Why the fuck does setting gradient to 1 in the ApplyDualOp method not work?
-        //! Although the function is assigning true to requires_grad it doesn't propogate to here
-        //* Because ApplyDualOp does a move operation which currently doesn't keep state info
         ret.requires_grad(true); 
         //* The output stores referenecs to the parent tensors as well as what operation produced it
-        //ret.ctx = Add_op(&lhs, &rhs);
         ret.ctx = std::make_shared<Add_op>(&lhs, &rhs);
         ret.has_ctx = true;
     };
-    /*
-    std::cout << "--- add(Tensor&, Tensor&)\n";
-    std::cout << "ret.requires_grad: " << ret.requires_grad() << "\n";
-    std::cout << "ret.has_ctx: " << ret.has_ctx << "\n";
-    std::cout << "add ret.ctx.parents.size: " << ret.ctx.parents.size() << "\n";
-    std::cout << "--------\n";
-    */
     return ret;
 }
 
@@ -687,7 +698,38 @@ Tensor operator+(Tensor& lhs, Tensor& rhs){
 }
 
 
-// ----- Multiplication -----
+// ----------- Subtraction ----------
+
+Tensor sub(Tensor& lhs, Tensor& rhs){
+    Tensor ret = ApplyDualOp(lhs, rhs, std::minus<float>());
+    if(lhs.requires_grad() || rhs.requires_grad()){
+        ret.requires_grad(true);
+        ret.ctx = std::make_shared<Sub_op>(&lhs, &rhs);
+        ret.has_ctx = true;
+    }
+    return ret;
+}
+
+
+Tensor operator-(float lhs, Tensor& rhs){
+    // Have to do it in 2 steps because I don't currently support rvalue references
+    // Otherwise, could write: return Tensor(lhs) - rhs
+    Tensor lhs_ (rhs.shape(), lhs);
+    return lhs_ - rhs;
+}
+
+Tensor operator-(Tensor& lhs, float rhs){
+    Tensor rhs_ (lhs.shape(), rhs);
+    return lhs - rhs_;
+}
+
+Tensor operator-(Tensor& lhs, Tensor& rhs){
+    return sub(lhs, rhs);
+}
+
+
+
+// ---------- Multiplication -----------
 
 Tensor operator*(const Tensor& lhs, const Tensor& rhs){
     if(lhs.shape() == rhs.shape()){
@@ -728,6 +770,29 @@ Tensor operator*(Tensor& lhs, Tensor& rhs){
     return mul(lhs, rhs);
 }
 
+// ---------- Power -----------
+
+/**
+ * A functor for computing the power of
+*/
+template <typename T>
+class _pow{
+    T p = 0;
+public:
+    _pow(T p){
+        this->p = p;
+    }
+    float operator()(float b){
+        return std::pow(b, p);
+    }
+};
+
+Tensor Tensor::square(){
+    Tensor ret (this->shape());
+    _pow<int> _square(2);
+    ApplyOpSimple(ret, *this, _square);
+    return ret;
+}
 
 
 // --------------------------- Print tensor --------------------------------
