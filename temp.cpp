@@ -54,21 +54,5 @@ int main()
 
     std::cout << "---\n";
 
-    B b(3, 7);
-    B b1(4, 8);
-    B b2(12, 13);
-
-    std::vector<B*> bs;
-    bs.push_back(&b);
-    bs.push_back(&b1);
-    bs.push_back(&b2);
-
-    //for(size_t i = bs.size(); i > 0; i--){
-    //    B * temp = bs[i];
-    for(B* temp : bs){
-        temp->sum();
-    }
-    
-
     return 0;
 }

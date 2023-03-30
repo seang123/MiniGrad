@@ -18,8 +18,8 @@ Op::Op(Tensor* left, Tensor* right){
 }
 
 void Op::backward(std::shared_ptr<Tensor> out_grad){
-    //throw std::runtime_error("Op.backward() not implemented!");
-    std::cout << "Op::backward()\n";
+    throw std::runtime_error("Op.backward() not implemented!");
+    //std::cout << "Op::backward()\n";
 }
 
 Tensor Op::forward(){
@@ -34,7 +34,6 @@ Add_op::Add_op(Tensor* left, Tensor* right) : Op(left, right){
     this->right = right;
     parents.insert(left);
     parents.insert(right);
-    std::cout << "add_op parents: "<< parents.size() << "\n";
 }
 
 /**
@@ -61,5 +60,30 @@ void Add_op::backward(std::shared_ptr<Tensor> out_grad){
 }
 
 Tensor Add_op::forward(){
-    throw std::runtime_error("Not implemented!");
+    throw std::runtime_error("Add_op::forward() -- Not implemented!");
+}
+
+
+// ----------------- Multiplication ----------------------
+
+Mul_op::Mul_op(Tensor* left, Tensor* right) : Op(left, right){
+    this->left = left;
+    this->right = right;
+    parents.insert(left);
+    parents.insert(right);
+}
+
+void Mul_op::backward(std::shared_ptr<Tensor> out_grad){
+    if(left->requires_grad()){
+        //* left.grad = right.values * out_grad
+        left->grad = std::make_shared<Tensor>((*right) * (*out_grad));
+    }
+    if(right->requires_grad()){
+        //* right.grad = left.values * out_grad
+        right->grad = std::make_shared<Tensor>((*left) * (*out_grad));
+    }
+}
+
+Tensor Mul_op::forward(){
+    throw std::runtime_error("Mul_op::forward() -- Not implemented!");
 }

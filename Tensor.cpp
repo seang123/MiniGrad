@@ -38,7 +38,7 @@ Tensor::Tensor(std::shared_ptr<Substance> sub) : values(sub){};
 
 // Shallow copy
 //Tensor::Tensor(const Tensor& lhs) = default;
-Tensor::Tensor(const Tensor& lhs) { std::cout << "shallow copy\n";}
+Tensor::Tensor(const Tensor& lhs) = default;
 
 // Move
 Tensor::Tensor(Tensor&& lhs) noexcept 
@@ -52,8 +52,7 @@ Tensor::Tensor(Tensor&& lhs) noexcept
 };
 
 // shallow copy
-//Tensor& Tensor::operator=(const Tensor& lhs) = default;
-Tensor& Tensor::operator=(const Tensor& lhs) { std::cout << "copy\n"; return *this;}
+Tensor& Tensor::operator=(const Tensor& lhs) = default;
 
 /** Move
  *  Data is moved from one tensor object to another (efficiently)
@@ -251,7 +250,7 @@ float& Tensor::operator[](const int index){
 /**
  * Total length of raw data array
 */
-const size_t Tensor::size() const {
+size_t Tensor::size() const {
     return values->size;
 }
 
@@ -291,7 +290,7 @@ size_t Tensor::ndim() {
     return values->shape.size();
 }
 
-const size_t Tensor::ndim() const{
+size_t Tensor::ndim() const{
     return values->shape.size();
 }
 
@@ -354,7 +353,7 @@ void Tensor::requires_grad(bool req_grad){
 bool Tensor::requires_grad(){
     return this->requires_grad_;
 }
-const bool Tensor::requires_grad() const {
+bool Tensor::requires_grad() const {
     return this->requires_grad_;
 }
 
@@ -688,6 +687,48 @@ Tensor operator+(Tensor& lhs, Tensor& rhs){
 }
 
 
+// ----- Multiplication -----
+
+Tensor operator*(const Tensor& lhs, const Tensor& rhs){
+    if(lhs.shape() == rhs.shape()){
+        Tensor ret(lhs.shape());
+        // simple sum
+        ApplyOpSimple(ret, lhs, rhs, std::multiplies<float>());
+        return ret;
+    }
+    else{
+        // Check if broadcastable
+        const Shape& ret_shape = CheckBroadcastable(lhs.shape(), rhs.shape());
+        Tensor ret(ret_shape);
+        ApplyOpBroadcast(ret, lhs, rhs, 0, 1, WrapOpForIter(std::multiplies<float>()));
+        return ret;
+    }
+}
+
+Tensor operator*(const Tensor& lhs, float rhs){
+    // Technically operator+(const Tensor&, Tensor&&) but degrades to const lvalue reference
+    return lhs * Tensor(Shape({1}), rhs);
+}
+
+Tensor operator*(float lhs, const Tensor& rhs){
+    return Tensor(Shape({1}), lhs) * rhs;
+}
+
+Tensor mul(Tensor& lhs, Tensor& rhs){
+    Tensor ret = ApplyDualOp(lhs, rhs, std::multiplies<float>());
+    if(lhs.requires_grad() || rhs.requires_grad()){
+        ret.requires_grad(true);
+        ret.ctx = std::make_shared<Mul_op>(&lhs, &rhs);
+        ret.has_ctx = true;
+    }
+    return ret;
+}
+
+Tensor operator*(Tensor& lhs, Tensor& rhs){
+    return mul(lhs, rhs);
+}
+
+
 
 // --------------------------- Print tensor --------------------------------
 
@@ -859,14 +900,6 @@ template Tensor Tensor::reshape(int, int, int, int, int, int, int, int, int,
  * Recursive walk
 */
 void _deepwalk(Tensor* node, std::set<Tensor* >& visited, std::vector<Tensor*>& nodes){
-    //nodes.push_back(node);
-    // if node has ctx
-    //      for parent 
-    //          if NOT visited
-    //              _deepwalk(parent[i], visited, nodes)
-    //      nodes.append(node)
-    // return nodes 
-    std::cout << "_deepwalk()\n";
     const bool is_in = visited.find(node) != visited.end();
     if (!is_in){
         visited.insert(node);
@@ -888,7 +921,6 @@ struct Graph{
  * Topological sort of the operations tree
 */
 Graph Tensor::deepwalk(){
-    std::cout << "deepwalk()\n";
     std::set<Tensor*> visited;
     std::vector<Tensor*> nodes;
     _deepwalk(this, visited, nodes);
@@ -906,7 +938,6 @@ Graph Tensor::deepwalk(){
  *      compute gradients for each parent
 */
 void Tensor::backward(){
-    std::cout << "backward()\n";
     // Initialise the gradient as 1
     //grad = std::make_shared<Tensor>(this->shape(), 1.0f, req_grad=false);
     this->grad = std::make_shared<Tensor>(this->values->shape, 1.f);
@@ -918,10 +949,9 @@ void Tensor::backward(){
 
     std::reverse(g.nodes.begin(), g.nodes.end());
 
-    for(auto& n : g.nodes){
-    //for(Tensor* n: g.nodes){
+    //for(auto& n : g.nodes){
+    for(Tensor* n: g.nodes){
         if( n->has_ctx == true){
-            std::cout << ">> " << n->name << "\n";
             n->ctx->backward(n->grad);
         }
     }

@@ -30,14 +30,25 @@ public:
 };
 
 class Add_op : public Op{
-public:
     Tensor* left;
     Tensor* right;
     std::set<Tensor*> parents;
+public:
     //std::vector<Tensor*> parents;
     Add_op(Tensor* left, Tensor* right);
     Tensor forward();
     void backward(std::shared_ptr<Tensor> );
+};
+
+
+class Mul_op : public Op{
+    Tensor* left;
+    Tensor* right;
+    std::set<Tensor*> parents;
+public:
+    Mul_op(Tensor* left, Tensor* right);
+    Tensor forward();
+    void backward(std::shared_ptr<Tensor>);
 };
 
 

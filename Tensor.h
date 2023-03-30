@@ -72,7 +72,7 @@ public:
     bool requires_grad_ = false;
     void requires_grad(bool);
     bool requires_grad();
-    const bool requires_grad() const;
+    bool requires_grad() const;
 
     std::string name;
 
@@ -114,10 +114,10 @@ public:
     operator float() const;
 
     void print();
-    const size_t size() const;
+    size_t size() const;
     float* id() const;
     size_t ndim();
-    const size_t ndim() const;
+    size_t ndim() const;
     std::string shape_str();
     const Shape& shape() const;
     void fill(float);
@@ -191,10 +191,14 @@ Tensor operator*(float lhs, const Tensor& rhs);
 Tensor operator/(float lhs, const Tensor& rhs);
 
 Tensor operator+(const Tensor& lhs, const Tensor& rhs);
-Tensor operator+(Tensor& lhs, Tensor& rhs);
 Tensor operator-(const Tensor& lhs, const Tensor& rhs);
 Tensor operator*(const Tensor& lhs, const Tensor& rhs);
 Tensor operator/(const Tensor& lhs, const Tensor& rhs);
+
+Tensor operator+(Tensor& lhs, Tensor& rhs);
+Tensor operator*(Tensor& lhs, Tensor& rhs);
+Tensor operator*(Tensor& lhs, Tensor& rhs);
+Tensor operator/(Tensor& lhs, Tensor& rhs);
 
 Tensor operator==(const Tensor lhs, const Tensor& rhs);
 
