@@ -1,7 +1,7 @@
 
 CXX = g++
 VER = -std=c++17
-LDFLAGS = $(VER) -static -Wall  -Wextra -O3 # -Werror
+LDFLAGS = $(VER) -static -Wall  -Wextra # -O3 # -Werror
 
 
 

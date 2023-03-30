@@ -40,9 +40,7 @@ Add_op::Add_op(Tensor* left, Tensor* right) : Op(left, right){
  * Compute the gradients for the parents of a tensor
 */
 void Add_op::backward(std::shared_ptr<Tensor> out_grad){
-    std::cout << "Add_op::backward()\n";
     if(left->requires_grad()){
-        std::cout << "left\n";
         // compute gradient for left parent
         //* left.grad += 1. * out.grad
         left->grad = out_grad;
@@ -50,7 +48,6 @@ void Add_op::backward(std::shared_ptr<Tensor> out_grad){
         //left->grad = std::make_shared<Tensor>(left->grad->reshape(left->shape()));
     }
     if(right->requires_grad()){
-        std::cout << "right\n";
         // compute gradient for right parent
         //* right.grad += 1. * out.grad
         right->grad = out_grad;

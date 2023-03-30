@@ -142,11 +142,76 @@ TEST_CASE("gradient accumulation"){
 
         CHECK(tensor_to_str(t6) == "[[3, 6, 9]]\n");
 
-        std::cout << "before backwards\n";
-
         t6.backward();
+        CHECK(tensor_to_str(*t1.grad) == "[[3, 3, 3]]\n");
+    }
 
-        std::cout << *t1.grad << "\n";
+    SUBCASE("karpathy example"){
+
+        Tensor a ({2.f});
+        a.requires_grad(true);
+        Tensor b ({-3.f});
+        b.requires_grad(true);
+        Tensor c ({10.f});
+        c.requires_grad(true);
+        Tensor e = a * b; // 2 * -3 = -6
+        Tensor d = e + c; // -6 + 10 = 4
+        Tensor f ({-2.f});
+        f.requires_grad(true);
+        Tensor L = d * f; // 4 * -2 = -8
+
+        //* Gradients will be as follows:
+        //? dL / dL = 1
+        //? dL / dd = f = -2
+        //? dL / df = d = 4
+        //? dL / dc = dL/dd * dd/dc => -2 * 1 = -2
+        //? dL / de = dL/dd * dd/de => -2 * 1 = -2
+        //? dL / db = dd/de * de/db = -2 * 2 = -4
+        //? dL / da = dL/de * de/da => -2 * b = -2 * -3 = 6
+
+        // dL/dd = (f(x + h) - f(x)) / h
+        //       = ((d+h)*f - d*f) / h
+        //       = (d*f + h*f - d*f) / h
+        //       = (h*f) / h
+        //       = f
+
+        // dd/dc = (f(x+h) - f(x)) / h
+        //       = ((c+h + e) - (c+e)) / h
+        //       = ( c + h + e - c - e) / h
+        //       = ( h ) / h
+        //       = 1.0
+        // dd/de = 1.0 by symmetry
+
+        L.backward();
+
+        CHECK(tensor_to_str(*a.grad) == "[6]\n");
+        CHECK(tensor_to_str(*b.grad) == "[-4]\n");
+        CHECK(tensor_to_str(*c.grad) == "[-2]\n");
+        CHECK(tensor_to_str(*e.grad) == "[-2]\n");
+        CHECK(tensor_to_str(*d.grad) == "[-2]\n");
+        CHECK(tensor_to_str(*f.grad) == "[4]\n");
+    }
+
+    SUBCASE("vector example"){
+        Tensor a ({3.f, 4.f, 2.f, 4.f, 4.f});
+        a.requires_grad(true);
+        Tensor b({1.f, 2.f, 2.f, 2.f, 4.f});
+        b.requires_grad(true);
+        Tensor c({3.f, 2.f, 4.f, 1.f, 3.f});
+        c.requires_grad(true);
+        Tensor e = a * b;
+        Tensor d = e + c;
+        Tensor f({-2.f, -2.f, -2.f, -2.f, -2.f});
+        f.requires_grad(true);
+        Tensor L = d * f;
+
+        std::cout << "e: " << e << "\n";
+        std::cout << "d: " << d << "\n";
+        std::cout << "L: " << L << "\n";
+        
+        L.backward();
+
+        std::cout << *f.grad << "\n";
     }
 
 }
