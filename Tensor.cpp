@@ -700,6 +700,20 @@ Tensor operator+(Tensor& lhs, Tensor& rhs){
 
 // ----------- Subtraction ----------
 
+/*
+Tensor sub(const Tensor& lhs, const Tensor& rhs){
+    Tensor ret = ApplyDualOp(lhs, rhs, std::minus<float>());
+    if(lhs.requires_grad() || rhs.requires_grad()){
+        ret.requires_grad(true);
+        Tensor lhs_ = lhs;
+        Tensor rhs_ = rhs;
+        ret.ctx = std::make_shared<Sub_op>(&lhs_, &rhs_);
+        ret.has_ctx = true;
+    }
+    return ret;
+}
+*/
+
 Tensor sub(Tensor& lhs, Tensor& rhs){
     Tensor ret = ApplyDualOp(lhs, rhs, std::minus<float>());
     if(lhs.requires_grad() || rhs.requires_grad()){
@@ -727,7 +741,12 @@ Tensor operator-(Tensor& lhs, Tensor& rhs){
     return sub(lhs, rhs);
 }
 
-
+/*
+Tensor operator-(float lhs, const Tensor& rhs){
+    const Tensor lhs_ (rhs.shape(), lhs);
+    return sub(lhs_, rhs);
+}
+*/
 
 // ---------- Multiplication -----------
 

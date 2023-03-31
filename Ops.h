@@ -29,6 +29,7 @@ public:
     virtual void backward(std::shared_ptr<Tensor> );
 };
 
+
 class Add_op : public Op{
     Tensor* left;
     Tensor* right;
@@ -40,9 +41,7 @@ public:
     void backward(std::shared_ptr<Tensor> );
 };
 
-/**
- * 
-*/
+
 class Sub_op : public Op{
     Tensor* left;
     Tensor* right;
@@ -63,6 +62,7 @@ public:
     Tensor forward();
     void backward(std::shared_ptr<Tensor>);
 };
+
 
 class tanh_op : public Op{
     Tensor* left;

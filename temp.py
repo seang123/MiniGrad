@@ -83,10 +83,19 @@ def kaparthy_example():
   print(f.grad)
 
 def tanh_exp():
-  t = np.array([-3, -2, -1, 0, 1, 2, 3, 4, 5])
+  #t = np.array([-3, -2, -1, 0, 1, 2, 3, 4, 5])
+  #t = np.tanh(t)
+  #print(t)
+  #print("----")
 
-  t = np.tanh(t)
-  print(t)
+  t = torch.tensor(np.array([-1., 0., 1., 2., 3., 4., 5.]), requires_grad=True)
+
+  out = torch.tanh(t);
+  print(out)
+  out.backward(torch.Tensor([1, 1, 1, 1, 1, 1, 1]));
+
+  print(t.grad)
+
 
 
 

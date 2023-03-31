@@ -129,8 +129,13 @@ tanh_op::tanh_op(Tensor* left) : Op(left){
 
 void tanh_op::backward(std::shared_ptr<Tensor> out_grad){
     if(left->requires_grad()){
-        //left.grad += (1 - t**2) * out.grad
-        //left->grad = std::make_shared<Tensor>( (1. - left->square() ) * (*out_grad));
+        //* left.grad += (1 - t**2) * out.grad
+        Tensor squared = left->square();  //! TODO: We should square the value of the child not the parent
+        Tensor temp = 1.f - squared;
+        //std::cout << "left: " << *left << "\n";
+        //std::cout << "squared: " << squared << "\n";
+        std::cout << "temp: " << temp << "\n";
+        left->grad = std::make_shared<Tensor>( temp * (*out_grad) );
     }
 }
 
