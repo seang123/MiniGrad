@@ -26,7 +26,8 @@ public:
     Op(Tensor*);
     Op();
     virtual Tensor forward();
-    virtual void backward(std::shared_ptr<Tensor> );
+    //virtual void backward(std::shared_ptr<Tensor> );
+    virtual void backward(const Tensor*);
 };
 
 
@@ -38,7 +39,8 @@ public:
     //std::vector<Tensor*> parents;
     Add_op(Tensor* left, Tensor* right);
     Tensor forward();
-    void backward(std::shared_ptr<Tensor> );
+    //void backward(std::shared_ptr<Tensor> );
+    void backward(const Tensor*);
 };
 
 
@@ -49,7 +51,8 @@ class Sub_op : public Op{
 public:
     Sub_op(Tensor* left, Tensor* right);
     Tensor forward();
-    void backward(std::shared_ptr<Tensor> );
+    //void backward(std::shared_ptr<Tensor> );
+    void backward(const Tensor*);
 };
 
 
@@ -60,7 +63,8 @@ class Mul_op : public Op{
 public:
     Mul_op(Tensor* left, Tensor* right);
     Tensor forward();
-    void backward(std::shared_ptr<Tensor>);
+    //void backward(std::shared_ptr<Tensor>);
+    void backward(const Tensor*);
 };
 
 
@@ -71,7 +75,8 @@ class tanh_op : public Op{
 public:
     tanh_op(Tensor* left);
     Tensor forward();
-    void backward(std::shared_ptr<Tensor>);
+    //void backward(std::shared_ptr<Tensor>);
+    void backward(const Tensor*);
 };
 
 #endif

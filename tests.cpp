@@ -241,24 +241,12 @@ TEST_CASE("Operations"){
     SUBCASE("tanh"){
         Tensor t1 ({-1.f, 0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
         t1.requires_grad(true);
+
         Tensor out = Ops::tanh(t1);
-        CHECK(tensor_to_str(out) == "[-0.761594, 0, 0.761594, 0.964028, 0.995055, 0.999329, 0.999909]");
         out.backward();
 
-        cout << "tanh out\n";
-        cout << out << "\n";
-
-        cout << "tanh grad\n";
-        cout << *t1.grad << "\n";
-
-        cout << "WRONG!!\n";
-
-        // t1.grad should == 
-        // [4.1997e-01, 1.0000e+00, 
-        //  4.1997e-01, 7.0651e-02, 
-        //  9.8660e-03, 1.3410e-03, 
-        //  1.8158e-04]
-
+        CHECK(tensor_to_str(out) == "[-0.761594, 0, 0.761594, 0.964028, 0.995055, 0.999329, 0.999909]");
+        CHECK(tensor_to_str(*t1.grad) == "[0.419974, 1, 0.419974, 0.0706508, 0.009866, 0.00134087, 0.000181556]");
     }
 
     SUBCASE("exponential "){

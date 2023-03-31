@@ -95,6 +95,7 @@ public:
     Tensor add(const Tensor& lhs, const Tensor& rhs);
 
     Tensor square();
+    Tensor square() const;
 
     // Reshape the tensor - dimensions listed in vector
     Tensor reshape(const Shape& shape) const;

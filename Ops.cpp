@@ -22,7 +22,8 @@ Op::Op(Tensor* left, Tensor* right){
     parents.insert(right);
 }
 
-void Op::backward(std::shared_ptr<Tensor> out_grad){
+//void Op::backward(std::shared_ptr<Tensor> out_grad){
+void Op::backward(const Tensor* out){
     throw std::runtime_error("Op.backward() not implemented!");
     //std::cout << "Op::backward()\n";
 }
@@ -44,18 +45,19 @@ Add_op::Add_op(Tensor* left, Tensor* right) : Op(left, right){
 /**
  * Compute the gradients for the parents of a tensor
 */
-void Add_op::backward(std::shared_ptr<Tensor> out_grad){
+//void Add_op::backward(std::shared_ptr<Tensor> out_grad){
+void Add_op::backward(const Tensor* out){
     if(left->requires_grad()){
         // compute gradient for left parent
         //* left.grad += 1. * out.grad
-        left->grad = out_grad;
+        left->grad = out->grad;
         //* left.grad.shape == left.shape   (may require reshape)
         //left->grad = std::make_shared<Tensor>(left->grad->reshape(left->shape()));
     }
     if(right->requires_grad()){
         // compute gradient for right parent
         //* right.grad += 1. * out.grad
-        right->grad = out_grad;
+        right->grad = out->grad;
         //* right.grad.shape == right.shape   (may require reshape)
         //right->grad = std::make_shared<Tensor>(right->grad->reshape(right->shape()));
     }
@@ -74,18 +76,19 @@ Sub_op::Sub_op(Tensor* left, Tensor* right) : Op(left, right){
     parents.insert(right);
 }
 
-void Sub_op::backward(std::shared_ptr<Tensor> out_grad){
+//void Sub_op::backward(std::shared_ptr<Tensor> out_grad){
+void Sub_op::backward(const Tensor* out){
     if(left->requires_grad()){
         // compute gradient for left parent
         //* left.grad += 1. * out.grad
-        left->grad = out_grad;
+        left->grad = out->grad;
         //* left.grad.shape == left.shape   (may require reshape)
         //left->grad = std::make_shared<Tensor>(left->grad->reshape(left->shape()));
     }
     if(right->requires_grad()){
         // compute gradient for right parent
         //* right.grad += 1. * out.grad
-        right->grad = out_grad;
+        right->grad = out->grad;
         //* right.grad.shape == right.shape   (may require reshape)
         //right->grad = std::make_shared<Tensor>(right->grad->reshape(right->shape()));
     }
@@ -104,14 +107,15 @@ Mul_op::Mul_op(Tensor* left, Tensor* right) : Op(left, right){
     parents.insert(right);
 }
 
-void Mul_op::backward(std::shared_ptr<Tensor> out_grad){
+//void Mul_op::backward(std::shared_ptr<Tensor> out_grad){
+void Mul_op::backward(const Tensor* out){
     if(left->requires_grad()){
         //* left.grad = right.values * out_grad
-        left->grad = std::make_shared<Tensor>((*right) * (*out_grad));
+        left->grad = std::make_shared<Tensor>((*right) * (*out->grad));
     }
     if(right->requires_grad()){
         //* right.grad = left.values * out_grad
-        right->grad = std::make_shared<Tensor>((*left) * (*out_grad));
+        right->grad = std::make_shared<Tensor>((*left) * (*out->grad));
     }
 }
 
@@ -127,15 +131,17 @@ tanh_op::tanh_op(Tensor* left) : Op(left){
     parents.insert(left);
 }
 
-void tanh_op::backward(std::shared_ptr<Tensor> out_grad){
+//void tanh_op::backward(std::shared_ptr<Tensor> out_grad){
+void tanh_op::backward(const Tensor* out){
     if(left->requires_grad()){
         //* left.grad += (1 - t**2) * out.grad
-        Tensor squared = left->square();  //! TODO: We should square the value of the child not the parent
+        //Tensor squared = left->square();  //! TODO: We should square the value of the child not the parent
+        Tensor squared = out->square();
         Tensor temp = 1.f - squared;
         //std::cout << "left: " << *left << "\n";
         //std::cout << "squared: " << squared << "\n";
         std::cout << "temp: " << temp << "\n";
-        left->grad = std::make_shared<Tensor>( temp * (*out_grad) );
+        left->grad = std::make_shared<Tensor>( temp * (*out->grad) );
     }
 }
 

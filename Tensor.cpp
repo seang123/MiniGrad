@@ -813,6 +813,13 @@ Tensor Tensor::square(){
     return ret;
 }
 
+Tensor Tensor::square() const {
+    Tensor ret (this->shape());
+    _pow<int> _square(2);
+    ApplyOpSimple(ret, *this, _square);
+    return ret;
+}
+
 
 // --------------------------- Print tensor --------------------------------
 
@@ -1036,7 +1043,7 @@ void Tensor::backward(){
     //for(auto& n : g.nodes){
     for(Tensor* n: g.nodes){
         if( n->has_ctx == true){
-            n->ctx->backward(n->grad);
+            n->ctx->backward(n);
         }
     }
 }
