@@ -4,7 +4,7 @@
 #include <cassert>
 
 #include "Tensor.h"
-#include "Iter.h"
+#include "Operations.h"
 
 //#define TINYNDARRAY_IMPLEMENTATION
 //#include "tinyndarray.h"
@@ -84,20 +84,26 @@ void timing(){
     t3.requires_grad(true);
 
     clock.toc();
-    std::cout << clock.duration().count() << "\n";
+    std::cout << "Tensor creation: " << clock.duration().count() << "\n";
 
 
     clock.tic();
     Tensor t4 = t1 + t2;
     Tensor t5 = t3 * t4;
+    t5 = Ops::tanh(t5);
     clock.toc();
 
-    std::cout << clock.duration<std::chrono::microseconds>().count() << "\n";
+    std::cout << "Operation: " << clock.duration<std::chrono::microseconds>().count() << "\n";
 
     clock.tic();
     t5.backward();
     clock.toc();
-    std::cout << clock.duration<std::chrono::microseconds>().count() << "\n";
+    std::cout << ".backward(): " << clock.duration<std::chrono::microseconds>().count() << "\n";
+
+
+    Tensor tt = {1.f, 2.f, 3.f};
+    tt = Ops::tanh(tt);
+    cout << tt << "\n";
 
 }
 

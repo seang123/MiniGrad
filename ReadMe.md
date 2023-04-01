@@ -11,12 +11,8 @@ The ndarray implementation is based on work from: https://github.com/takiyu/tiny
 
 Compile with makefile or:
 
-    g++ -std=c++17 -static main.cpp Tensor.cpp Substance.cpp Iter.cpp Ops.cpp Operations.cpp
+    g++ -std=c++17 -static main.cpp Tensor.cpp Substance.cpp Ops.cpp Operations.cpp
 
-
-
-const after function definition - makes it a compiler error for this class function to change a member variable of the class
-reading is allowed.
 
 ---
 
@@ -75,14 +71,19 @@ TODO
 # Issues
 
 - [ ] Currently cannot create an array with a final shape dimension of 1 ie. 2x3x1
-work around is create 2x3 and then reshape to 2x3x1
+work around is to create a 2x3 and then reshape to 2x3x1
 
 - [ ] Calling .requires_grad(true) on a tensor created in the ApplyDualOp() method changes the requires_grad attribute to true, however this doesn't hold for the returned tensor for some reason.
 
+    - Think this was becuase of the move constructor only copying the substance and nothing else / think I fixed it but haven't checked
+
 # TODO
+
+- [ ] neural network modules (linear, conv, ...)
 
 - [ ] Add support for rvalue-references in the tensor operators
 
 - [ ] Test if .backward() works properly if a tensor is the parent for > 1 operation
 
+- [ ] Static graph bulding
 

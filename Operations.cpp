@@ -3,7 +3,9 @@
 #include <vector>
 #include <algorithm>
 #include <math.h>
+#include <xmmintrin.h>
 
+#define M_LN2 0.69314718055994530942
 
 template <typename F>
 static void runOp(int size, F op){
@@ -24,10 +26,35 @@ inline void ApplyOpSimple(Tensor& ret, const Tensor& src, F op) {
 
 namespace Ops{
 
+__m128 BetterFastExpSse (__m128 x)
+{
+  const __m128 a = _mm_set1_ps ((1 << 22) / float(M_LN2));  // to get exp(x/2)
+  const __m128i b = _mm_set1_epi32 (127 * (1 << 23));       // NB: zero shift!
+  __m128i r = _mm_cvtps_epi32 (_mm_mul_ps (a, x));
+  __m128i s = _mm_add_epi32 (b, r);
+  __m128i t = _mm_sub_epi32 (b, r);
+  return _mm_div_ps (_mm_castsi128_ps (s), _mm_castsi128_ps (t));
+}
+
+template <unsigned i>
+float vectorGetByIndex( __m128 V ){
+
+    V = _mm_shuffle_ps(V, V, _MM_SHUFFLE(i, i, i, i));
+    return _mm_cvtss_f32(V);
+}
 
 template <typename T>
 static float _tanh(T y){
-    return (exp(2 * y) - 1 ) / (exp(2 * y) + 1);
+    // SIMD exp  ( 2x faster )
+    // Has a small error at around 0.00X decimal points
+    float t = 3.f;
+    __m128 SSEa=_mm_load1_ps(&y);
+    auto a = BetterFastExpSse(2 * SSEa);
+    float b = vectorGetByIndex<0>(a);
+    return (b - 1) / (b + 1);
+
+    // Basic tanh eq
+    //return (exp(2 * y) - 1 ) / (exp(2 * y) + 1);
 }
 
 template <typename T>
