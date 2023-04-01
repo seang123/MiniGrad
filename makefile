@@ -1,7 +1,7 @@
 
 CXX = g++
 VER = -std=c++17
-LDFLAGS = $(VER) -static -Wall  -Wextra # -O3 # -Werror
+LDFLAGS = $(VER) -static -Wall -Wconversion -Wpedantic -Wextra -O0 # -O3 # -Werror
 
 
 
@@ -15,9 +15,6 @@ tests: tests.o tensor.o substance.o ops.o operations.o
 debug: main.o tensor.o substance.o ops.o operations.o
 	$(CXX) $(LDFLAGS) -o main main.o Tensor.o Substance.o Ops.o operations.o
 
-
-main: main.o tensor.o substance.o ops.o operations.o
-	$(CXX) -o main main.o tensor.o substance.o ops.o operations.o
 
 
 main.o: main.cpp

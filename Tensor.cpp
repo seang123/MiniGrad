@@ -8,6 +8,7 @@
 #include <set>
 #include <algorithm>
 #include <math.h>
+#include <random>
 
 #include "Tensor.h"
 #include "Substance.h"
@@ -15,6 +16,11 @@
 
 // ----------------------- Forward declare ----------------------------
 
+template <typename F>
+void ApplyOpSimple(Tensor& dst, const Tensor& lhs, const Tensor& rhs, F op);
+
+template <typename F>
+inline void ApplyOpSimple(Tensor& ret, const Tensor& src, F op);
 
 
 template <typename F>
@@ -200,6 +206,51 @@ Tensor::Tensor(FloatList<9> init_list) : Tensor(CheckFListShape(init_list)){
     CopyFListElems(init_list, values->vals.get());
 }
 
+
+// ---------------- Tensor init of 1's -------------------
+
+Tensor Tensor::Ones(const Shape& shape){
+    return Tensor(shape, 0.f);
+}
+
+/**
+ * Tensor t = Tensor::Ones(1, 2, 3, 4);
+ * t.shape() == 1x2x3x4
+*/
+template <typename... S>
+Tensor Tensor::Ones(S... shape){
+    return Ones({shape...});
+}
+
+// ---------------- Random data init ------------------
+
+std::random_device Tensor::s_rand_seed;
+std::mt19937 Tensor::s_rand_engine(s_rand_seed());
+
+void Tensor::Seed(){
+    s_rand_engine = std::mt19937(s_rand_seed());
+}
+
+void Tensor::Seed(uint32_t seed){
+    s_rand_engine = std::mt19937(seed);
+}
+
+template <typename D, typename R>
+Tensor CreateRandomArray(const Shape& shape, D&& dist, R&& rand_engine){
+    Tensor ret(shape);
+    ApplyOpSimple(ret, [&]() { return static_cast<float>(dist(rand_engine));});
+    return ret;
+}
+
+Tensor Tensor::Uniform(float low, float high, const Shape& shape){
+    std::uniform_real_distribution<> dist(low, high);
+    return CreateRandomArray(shape, dist, s_rand_engine);
+}
+
+Tensor Tensor::Uniform(const Shape& shape){
+    return Uniform(0.f, 1.f, shape);
+}
+
 // ------------------------
 /// --- Cast --------------
 // ------------------------
@@ -374,6 +425,9 @@ void ApplyOpSimple(Tensor& dst, const Tensor& lhs, const Tensor& rhs, F op) {
     }
 }
 
+/**
+ * ApplyOpSimple with only 1 source tensor
+*/
 template <typename F>
 inline void ApplyOpSimple(Tensor& ret, const Tensor& src, F op) {
     auto&& ret_data = ret.data();
@@ -383,6 +437,23 @@ inline void ApplyOpSimple(Tensor& ret, const Tensor& src, F op) {
         ret_data[i] = op(src_data[i]);
     }
 }
+
+/**
+ * ApplyOpSimple with only a return tensor and a function
+*/
+template <typename F>
+inline void ApplyOpSimple(Tensor& ret, F op) {
+    auto&& ret_data = ret.data();
+    /*
+    RunParallel(static_cast<int>(ret.size()),
+                [&](int i) { ret_data[i] = op(); });
+    */
+    for(size_t i = 0; i < ret.size(); i++){
+        ret_data[i] = op();
+    }
+}
+
+// --------------------------------------------------------------------
 
 // --------------------- Broadcasting tensors -----------------------
 /**
@@ -608,10 +679,6 @@ inline auto WrapOpForIter(F op){
 // -------------------------------- Math operators ----------------------------
 
 template <typename F>
-Tensor ApplySingleOp(const Tensor& lhs, F op){
-}
-
-template <typename F>
 Tensor ApplyDualOp(const Tensor& lhs, const Tensor& rhs, F op) {
     if (lhs.shape() == rhs.shape()) {
         // Apply without broadcast because of same size for speed up.
@@ -806,6 +873,9 @@ public:
     }
 };
 
+/**
+ * Square (^2) a tensor and return a new tensor
+*/
 Tensor Tensor::square(){
     Tensor ret (this->shape());
     _pow<int> _square(2);
@@ -813,6 +883,9 @@ Tensor Tensor::square(){
     return ret;
 }
 
+/**
+ * Square a const tensor and return a new tensor
+*/
 Tensor Tensor::square() const {
     Tensor ret (this->shape());
     _pow<int> _square(2);
@@ -981,6 +1054,18 @@ template Tensor Tensor::reshape(int, int, int, int, int, int, int, int, int,
 template Tensor Tensor::reshape(int, int, int, int, int, int, int, int, int,
                                   int, int) const;
 
+// For `Ones(S... shape)`
+template Tensor Tensor::Ones(int);
+template Tensor Tensor::Ones(int, int);
+template Tensor Tensor::Ones(int, int, int);
+template Tensor Tensor::Ones(int, int, int, int);
+template Tensor Tensor::Ones(int, int, int, int, int);
+template Tensor Tensor::Ones(int, int, int, int, int, int);
+template Tensor Tensor::Ones(int, int, int, int, int, int, int);
+template Tensor Tensor::Ones(int, int, int, int, int, int, int, int);
+template Tensor Tensor::Ones(int, int, int, int, int, int, int, int, int);
+template Tensor Tensor::Ones(int, int, int, int, int, int, int, int, int,
+                               int);
 
 
 // ----------------------- Backwards -----------------------------
@@ -1029,20 +1114,18 @@ Graph Tensor::deepwalk(){
  *      compute gradients for each parent
 */
 void Tensor::backward(){
-    // Initialise the gradient as 1
-    //grad = std::make_shared<Tensor>(this->shape(), 1.0f, req_grad=false);
+    //* Initialise the gradient as 1
     this->grad = std::make_shared<Tensor>(this->values->shape, 1.f);
 
-    //* parents = topo_sort()
-    //* for node in parents
-    //* if node.has_grad -> node._backward()
-    Graph g = this->deepwalk();
+    //* Collect the operational graph
+    Graph g = deepwalk();
 
+    //* Reverse the graph
     std::reverse(g.nodes.begin(), g.nodes.end());
 
     //for(auto& n : g.nodes){
     for(Tensor* n: g.nodes){
-        if( n->has_ctx == true){
+        if( n->has_ctx == true ){
             n->ctx->backward(n);
         }
     }

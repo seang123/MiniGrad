@@ -90,7 +90,8 @@ def tanh_exp():
 
   t = torch.tensor(np.array([-1., 0., 1., 2., 3., 4., 5.]), requires_grad=True)
 
-  out = torch.tanh(t);
+  #out = torch.tanh(t);
+  out = torch.exp(t)
   print(out)
   out.backward(torch.Tensor([1, 1, 1, 1, 1, 1, 1]));
 

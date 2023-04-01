@@ -2,6 +2,7 @@
 #define _Tensor_H_
 
 #include <iostream>
+#include <random>
 #include <vector>
 #include <memory>
 
@@ -52,6 +53,9 @@ private:
     const float* begin() const;
     const float* end() const;
 
+    static std::random_device s_rand_seed;
+    static std::mt19937 s_rand_engine;
+
 public:
     Tensor();
     Tensor(std::vector<float>, bool req_grad=false); // array, array_size
@@ -81,9 +85,17 @@ public:
     bool has_ctx = false;
 
     static Tensor zeros(const Shape& shape); // Zero init tensor - parameter: shape
+    static Tensor Ones(const Shape& shape);
+    template <typename... S>
+    static Tensor Ones(S... shape);
 
     static Tensor Arange(float stop);
     static Tensor Arange(float start, float stop, float step = 1.f);
+
+    static void Seed();
+    static void Seed(uint32_t);
+    static Tensor Uniform(float, float, const Shape&);
+    static Tensor Uniform(const Shape&);
 
     //Iter begin();
     //Iter end();

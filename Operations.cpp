@@ -42,7 +42,7 @@ Tensor tanh(Tensor& t){
     Tensor ret (t.shape());
     ApplyOpSimple(ret, t, _tanh<float>);
 
-    if(t.requires_grad() == true){
+    if(t.requires_grad()){
         ret.requires_grad(true);
         ret.has_ctx = true;
         ret.ctx = std::make_shared<tanh_op>(&t);
@@ -57,6 +57,13 @@ Tensor tanh(Tensor& t){
 Tensor exp(Tensor& t){
     Tensor ret (t.shape());
     ApplyOpSimple(ret, t, _exp<float>);
+
+    if(t.requires_grad()){
+        ret.requires_grad(true);
+        ret.has_ctx = true;
+        ret.ctx = std::make_shared<exp_op>(&t);
+    }
+
     return ret;
 }
 
@@ -78,11 +85,10 @@ public:
 /**
  * Takes the tensor to the power of some value
 */
-Tensor pow(Tensor& t, int p){
+template <typename T>
+Tensor pow(Tensor& t, T p){
     Tensor ret (t.shape());
-    _pow<float> to_the_power(p);
-    //ApplyOpSimple(ret, t, std::pow<float, float>);
-    //ApplyOpSimple(ret, t, [&](int i){std::pow(t[i], p);});
+    _pow<T> to_the_power(p);
     ApplyOpSimple(ret, t, to_the_power);
     return ret;
 }

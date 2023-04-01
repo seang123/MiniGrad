@@ -75,7 +75,16 @@ class tanh_op : public Op{
 public:
     tanh_op(Tensor* left);
     Tensor forward();
-    //void backward(std::shared_ptr<Tensor>);
+    void backward(const Tensor*);
+};
+
+class exp_op : public Op{
+    Tensor* left;
+    Tensor* right;
+    std::set<Tensor*> parents;
+public:
+    exp_op(Tensor* left);
+    Tensor forward();
     void backward(const Tensor*);
 };
 

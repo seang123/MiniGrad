@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <chrono>
+#include <cassert>
 
 #include "Tensor.h"
 #include "Iter.h"
@@ -7,6 +9,29 @@
 //#define TINYNDARRAY_IMPLEMENTATION
 //#include "tinyndarray.h"
 //using tinyndarray::NdArray;
+
+template <typename DT = std::chrono::microseconds,
+          typename ClockT = std::chrono::steady_clock>
+class Timer{
+    using timep_t = decltype(ClockT::now());
+    timep_t _start = ClockT::now();
+    timep_t _end   = {};
+public:
+    void tic(){
+        _end = timep_t{};
+        _start = ClockT::now();
+    }
+    void toc(){
+        _end = ClockT::now();
+    }
+
+    template <typename duration_t = DT>
+    auto duration() const {
+        //    std::cout << clock.duration().count() << "\n";
+        assert( _end != timep_t{} && "Timer must be call .toc() before reading time");
+        return std::chrono::duration_cast<duration_t>(_end - _start);
+    }
+};
 
 using std::cout;
 
@@ -46,10 +71,40 @@ void basic_test(){
 
 }
 
+void timing(){
+    Timer<> clock;
+
+    clock.tic();
+    Tensor t1 = Tensor::Uniform(Shape{50, 28, 28});
+    t1.requires_grad(true);
+    Tensor t2 = Tensor::Uniform(Shape{50, 28, 28});
+    t2.requires_grad(true);
+
+    Tensor t3 = Tensor::Uniform(Shape{50, 28, 28});
+    t3.requires_grad(true);
+
+    clock.toc();
+    std::cout << clock.duration().count() << "\n";
+
+
+    clock.tic();
+    Tensor t4 = t1 + t2;
+    Tensor t5 = t3 * t4;
+    clock.toc();
+
+    std::cout << clock.duration<std::chrono::microseconds>().count() << "\n";
+
+    clock.tic();
+    t5.backward();
+    clock.toc();
+    std::cout << clock.duration<std::chrono::microseconds>().count() << "\n";
+
+}
+
 
 int main()
 {
-    basic_test();
+    timing();
 
     return 0;
 }

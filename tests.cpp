@@ -18,6 +18,12 @@ static std::string tensor_to_str(const Tensor& t){
     return ss.str();
 }
 
+static std::string shape_to_str(const Shape& s){
+    std::stringstream ss;
+    ss << s;
+    return ss.str();
+}
+
 // ------------------- test print function -----------------
 
 std::string print_tensor(){
@@ -41,33 +47,6 @@ std::string print_tensor_shape(){
     return ss.str();
 }
 
-// ------------------- Addition ---------------
-
-std::string tensor_addition(){
-    const Tensor t1 = {{1.f, 2.f, 3.f}};
-    const Tensor t2 = {{4.f, 5.f, 6.f}};
-    Tensor t3 = t1 + t2;
-    std::stringstream ss;
-    ss << t3;
-    return ss.str();
-}
-
-std::string tensor_addition_broadcast(){
-    const Tensor t1 = {{1.f, 2.f}, {3.f, 4.f}};  // 2x2
-    const Tensor t2 = {{4.f, 5.f}};  // 1x2
-    const Tensor t3 = t1 + t2;
-    std::stringstream ss;
-    ss << t3;
-    return ss.str();
-}
-
-// --------------- basic ops --------------------
-
-/*Tensor equality(){
-    Tensor t = {{1, 2, 3}};
-    return t;
-}*/
-
 TEST_CASE("tensor print"){
     std::cout << "-- tensor printing\n";
     CHECK(print_tensor() == "[[1, 2, 3]]");
@@ -75,10 +54,27 @@ TEST_CASE("tensor print"){
     CHECK(print_tensor_shape() == "[2, 2]");
 }
 
-TEST_CASE("tensor addition"){
-    std::cout << "-- tenor addition\n";
-    CHECK(tensor_addition() == "[[5, 7, 9]]");
-    CHECK(tensor_addition_broadcast() == "[[5, 7],\n [7, 9]]");
+TEST_CASE("Init"){
+
+    SUBCASE("Ones"){
+        Tensor t1 = Tensor::Ones(2, 3);
+        CHECK(shape_to_str(t1.shape()) == "[2, 3]");
+    }
+
+    SUBCASE("Zeros"){
+
+    }
+
+    SUBCASE("Shape"){
+        Tensor t1 (Shape{3, 2, 4});
+        CHECK(shape_to_str(t1.shape()) == "[3, 2, 4]");
+    }
+
+    SUBCASE("Shape + fill"){
+        Tensor t1 (Shape{2, 2}, 4.0f);
+        CHECK(shape_to_str(t1.shape()) == "[2, 2]");
+        CHECK(tensor_to_str(t1) == "[[4, 4],\n [4, 4]]");
+    }
 }
 
 TEST_CASE("basic operations"){
@@ -239,7 +235,6 @@ TEST_CASE("Operations"){
     Tensor t1 ({-1.f, 0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
 
     SUBCASE("tanh"){
-        Tensor t1 ({-1.f, 0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
         t1.requires_grad(true);
 
         Tensor out = Ops::tanh(t1);
@@ -250,8 +245,13 @@ TEST_CASE("Operations"){
     }
 
     SUBCASE("exponential "){
+        t1.requires_grad(true);
         Tensor out = Ops::exp(t1);
         CHECK(tensor_to_str(out) == "[0.367879, 1, 2.71828, 7.38906, 20.0855, 54.5981, 148.413]");
+
+        out.backward();
+        // y = e^x  ->  dy/dx = e^x
+        CHECK(tensor_to_str(out) == tensor_to_str(*t1.grad));
     }
 
     SUBCASE("Tensor::square()"){
@@ -259,5 +259,21 @@ TEST_CASE("Operations"){
         CHECK(tensor_to_str(out) == "[1, 0, 1, 4, 9, 16, 25]");
     }
 
+}
+
+TEST_CASE("Random"){
+    SUBCASE("Uniform"){
+        Tensor t1 = Tensor::Uniform(Shape{2, 3});
+    }
+
+    SUBCASE("seed"){
+        Tensor::Seed(42);
+        Tensor t1 = Tensor::Uniform(Shape{2, 2});
+
+        Tensor::Seed(42);
+        Tensor t2 = Tensor::Uniform(Shape{2, 2});
+
+        CHECK(tensor_to_str(t1) == tensor_to_str(t2));
+    }
 
 }

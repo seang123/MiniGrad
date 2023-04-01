@@ -9,15 +9,50 @@ The ndarray implementation is based on work from: https://github.com/takiyu/tiny
 
 ---
 
-Compile:
+Compile with makefile or:
 
-    g++ -std=c++17 -static main.cpp Tensor.cpp Substance.cpp Iter.cpp Ops.cpp
+    g++ -std=c++17 -static main.cpp Tensor.cpp Substance.cpp Iter.cpp Ops.cpp Operations.cpp
 
 
 
 const after function definition - makes it a compiler error for this class function to change a member variable of the class
 reading is allowed.
 
+---
+
+Example use: 
+
+```
+Tensor t1 = {1.f, 2.f, 3.f, 4.f, 5.f}; // shape: (5,)
+Tensor t2 = {5.f}; // shape: (1,)
+
+// Forward pass 
+Tensor out = t1 * t2;
+
+// Backwards pass
+out.backward();
+
+// Get the gradients (stored as a tensor obj)
+std::cout << *t1.grad << "\n";
+
+```
+
+--- 
+
+# Initialisation
+
+```
+// Tensor with some shape (buffer will have random undefined values)
+Tensor t = Tensor(Shape{2, 3}); // shape: (2, 3) 
+
+// Tensor of 1's
+Tensor t = Tensor::Ones(Shape(2, 3)) 
+Tensor t = Tensor::Ones(3, 2, 4) // shape: (3, 2, 4)
+
+Tensor::Seed(42); // Seed rng 
+Tensor t = Tensor::Uniform(0.f, 1.f, Shape(2, 3)); // Uniform [0., 1.] shape: (2,3)
+Tensor t = Tensor::Uniform((2, 3)); // Uniform [0., 1.] shape: (2, 3)
+```
 
 # Operations
 
@@ -44,4 +79,10 @@ work around is create 2x3 and then reshape to 2x3x1
 
 - [ ] Calling .requires_grad(true) on a tensor created in the ApplyDualOp() method changes the requires_grad attribute to true, however this doesn't hold for the returned tensor for some reason.
 
+# TODO
+
 - [ ] Add support for rvalue-references in the tensor operators
+
+- [ ] Test if .backward() works properly if a tensor is the parent for > 1 operation
+
+
