@@ -26,7 +26,7 @@ Linear::Linear(int in_size, int out_size, bool use_bias) : Module() {
     }
 }
 
-Tensor Linear::forward(const Tensor& x){
+Tensor Linear::forward(Tensor& x){
     // Compute the dot product between input x and this->weight
     // y = xW^T + b
 

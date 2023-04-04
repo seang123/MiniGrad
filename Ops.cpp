@@ -180,13 +180,30 @@ dot_op::dot_op(Tensor* left, Tensor* right) : Op(left, right){
 
     out->grad is the upstream gradient which will be computed first in the operations chain
 
+    in:  [32, 3, 16] @ [16, 2]
+    out: [32, 3, 2]
+    out->grad: [32, 3, 2]  // (1)
+    right:     [16, 2]    //  (2) cannot multiply 1 and 2
+
+
+    in:  [2, 2] @ [2, 3]
+    out: [2, 3]
+    out->grad: [2, 3]
 */
 void dot_op::backward(const Tensor* out){
     if(left->requires_grad()){
-        left->grad = std::make_shared<Tensor>(*(out->grad) * *right);
+        //left->grad = std::make_shared<Tensor>(*(out->grad) * *right);
+        // [2, 3] * [3, 2] => [2, 2]
+        //left->grad = std::make_shared<Tensor>(out->grad->dot(*right));
+        Tensor right_t = Transpose(*right);
+        left->grad = std::make_shared<Tensor>(out->grad->dot(right_t));
     }
     if(right->requires_grad()){
-        right->grad = std::make_shared<Tensor>(*(out->grad) * *left);
+        //right->grad = std::make_shared<Tensor>(*left * *(out->grad));
+        // [2, 2] * [2, 3]
+        //right->grad = std::make_shared<Tensor>(left->dot(*out->grad));
+        Tensor left_t = Transpose(*left);
+        right->grad = std::make_shared<Tensor>(left_t.dot(*out->grad));
     }
 }
 

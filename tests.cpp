@@ -262,13 +262,19 @@ TEST_CASE("Operations"){
 
 
     SUBCASE("Dot product"){
-        Tensor::SetNumWorkers(2);
-        Tensor t2 = Tensor::Uniform(Shape{32, 3, 16});
-        Tensor t3 = Tensor::Uniform(Shape{16, 2});
+        Tensor::SetNumWorkers(-1);
+        Tensor t2 = {{1.f, 2.f}, {3.f, 4.f}};
+        t2.requires_grad(true);
+        Tensor t3 = {{1.f, 2.f, 3.f}, {4.f, 5.f, 6.f}};
+        t3.requires_grad(true);
 
         Tensor t4 = t2.dot(t3);
+        CHECK(tensor_to_str(t4) == "[[9, 12, 15],\n [19, 26, 33]]");
 
-        cout << "t4.shape(): " << t4.shape() << "\n";
+        t4.backward();
+
+        CHECK(tensor_to_str(*t2.grad) == "[[6, 15],\n [6, 15]]");
+        CHECK(tensor_to_str(*t3.grad) == "[[4, 4, 4],\n [6, 6, 6]]");
     }
 
 }

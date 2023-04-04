@@ -121,7 +121,7 @@ public:
 
     Tensor reduce_sum(int);
 
-    Tensor dot(const Tensor& other) const;
+    Tensor dot(Tensor& other);
 
     // Overload index operator 
     float& operator[](const int);
@@ -171,6 +171,9 @@ public:
     static int GetBatchScale();
     static void SetBatchScale(int batch_scale);
 };
+
+
+Tensor Transpose(const Tensor&);
 
 template <typename F>
 void ApplyOpSimple(Tensor& dst, const Tensor& lhs, const Tensor& rhs, F op);

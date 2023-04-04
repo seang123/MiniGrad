@@ -105,13 +105,16 @@ def linear_layer():
   #x = np.random.uniform(0, 1, size=(16, 32))
   #x.astype(np.float32)
   #x = torch.tensor(x)
-  x = torch.randn(32)
-  l1 = torch.nn.Linear(32, 2)
 
-  y = l1(x)
+  x = torch.tensor(np.array([[1., 2.], [3., 4.]]), requires_grad=True)
+  y = torch.tensor(np.array([[1., 2., 3.], [4., 5., 6.]]), requires_grad=True)
 
+  out = x @ y;
+  print(out)
 
-  print(y.shape)
+  out.backward(torch.tensor([[1, 1, 1], [1, 1, 1]]))
+  print(x.grad)
+  print(y.grad)
 
 
 

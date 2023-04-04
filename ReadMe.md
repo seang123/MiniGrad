@@ -87,3 +87,5 @@ work around is to create a 2x3 and then reshape to 2x3x1
 
 - [ ] Static graph bulding
 
+- [ ] refactor some of the operations methods to take const parameters
+

@@ -19,7 +19,7 @@ namespace nn{
 class Module{
 
     // A modules operator() should call forward()
-    virtual Tensor forward(const Tensor&);
+    virtual Tensor forward(Tensor&);
 
 };
 
@@ -37,7 +37,7 @@ public:
     Linear(int in_size, int out_size, bool use_bias = true);
     void print(std::ostream&, const Linear&) const;
 
-    Tensor forward(const Tensor&);
+    Tensor forward(Tensor&);
 
 };
 

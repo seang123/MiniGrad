@@ -1077,7 +1077,7 @@ Tensor Tensor::square() const {
 /**
  * Dot product for 1-d array
 */
-static Tensor DotNdArray1d(const Tensor& lhs, const Tensor& rhs) {
+static Tensor DotTensor1d(const Tensor& lhs, const Tensor& rhs) {
     const size_t size = lhs.size();
     if (size != rhs.size()) {
         throw std::runtime_error("Invalid size for inner product of 1D");
@@ -1220,7 +1220,7 @@ static Tensor DotTensor(const Tensor& lhs, const Tensor& rhs) {
         return lhs * static_cast<float>(rhs);
     } else if (l_shape.size() == 1 && r_shape.size() == 1) {
         // Inner product of vector (1D, 1D)
-        return DotNdArray1d(lhs, rhs);
+        return DotTensor1d(lhs, rhs);
     } else if (r_shape.size() == 1) {
         // Broadcast right 1D array
         const Shape shape(l_shape.begin(), l_shape.end() - 1);
@@ -1231,13 +1231,13 @@ static Tensor DotTensor(const Tensor& lhs, const Tensor& rhs) {
     }
 }
 
-Tensor Tensor::dot(const Tensor& other) const{
+Tensor Tensor::dot(Tensor& other){
     //return DotTensor(*this, other);
     Tensor ret = DotTensor(*this, other);
     if(this->requires_grad() || other.requires_grad()){
         ret.requires_grad(true);
         ret.has_ctx = true;
-        ret.ctx = std::make_shared<dot_op>(this, other);
+        ret.ctx = std::make_shared<dot_op>(this, &other);
     }
     return ret;
 }
@@ -1291,7 +1291,7 @@ static void OutputArrayMultiDim(std::ostream& os,
     }
 }
 
-static void OutputNdArray(std::ostream& os, const Tensor& x) {
+static void OutputTensor(std::ostream& os, const Tensor& x) {
     const int size = static_cast<int>(x.size());
     const Shape& shape = x.shape();
     const std::vector<int>& child_sizes = ComputeChildSizes(shape);
@@ -1320,13 +1320,139 @@ static void OutputShape(std::ostream& os, const Shape& shape) {
 }
 
 std::ostream& operator<<(std::ostream& os, const Tensor& x) {
-    OutputNdArray(os, x);
+    OutputTensor(os, x);
     return os;
 }
 
 std::ostream& operator<<(std::ostream& os, const Shape& s){
     OutputShape(os, s);
     return os;
+}
+
+// -------------- Utilities for NdArray (Dual operator in-place) ---------------
+
+template <typename F>
+Tensor ApplyDualOpInplace(Tensor&& lhs, Tensor&& rhs, F op,
+                           const bool allow_new = true) {
+    if (lhs.shape() == rhs.shape()) {
+        // Apply without broadcast because of same size for speed up.
+        ApplyOpSimple(lhs, lhs, rhs, op);  // Use left as result
+        return std::move(lhs);
+    } else {
+        // Check it is possible to broadcast
+        const Shape& ret_shape = CheckBroadcastable(lhs.shape(), rhs.shape());
+        // Select result with shape matching
+        Tensor&& ret =
+                (ret_shape == lhs.shape()) ? lhs :                  // left
+                        (ret_shape == rhs.shape()) ? rhs :          // right
+                                (allow_new) ? Tensor(ret_shape) :  // new
+                                        throw std::runtime_error(
+                                                "Invalid shape for in-place"
+                                                " operation");
+        // Apply broadcast
+        ApplyOpBroadcast(ret, lhs, rhs, 0, 1, WrapOpForIter(op));
+        return std::move(ret);
+    }
+}
+
+template <typename F>
+Tensor ApplyDualOpInplace(Tensor&& lhs, const Tensor& rhs, F op,
+                           const bool allow_new = true) {
+    if (lhs.shape() == rhs.shape()) {
+        // Apply without broadcast because of same size for speed up.
+        ApplyOpSimple(lhs, lhs, rhs, op);
+        return std::move(lhs);
+    } else {
+        // Check it is possible to broadcast
+        const Shape& ret_shape = CheckBroadcastable(lhs.shape(), rhs.shape());
+        // Select result with shape matching
+        Tensor&& ret =
+                (ret_shape == lhs.shape()) ? lhs :          // left
+                        (allow_new) ? Tensor(ret_shape) :  // new
+                                throw std::runtime_error(
+                                        "Invalid shape for in-place operation");
+        // Apply broadcast (result matrix is lhs)
+        ApplyOpBroadcast(ret, lhs, rhs, 0, 1, WrapOpForIter(op));
+        return std::move(ret);
+    }
+}
+
+template <typename F>
+inline Tensor ApplyDualOpInplace(const Tensor& lhs, Tensor&& rhs, F op,
+                                  const bool allow_new = true) {
+    // Swap left and right
+    return ApplyDualOpInplace(std::move(rhs), lhs, ReverseOp(op), allow_new);
+}
+
+template <typename F>
+Tensor ApplyDualOpInplace(Tensor&& lhs, float rhs, F op) {
+    // Broadcast right float
+    // Simply apply all
+    ApplyOpSimple(lhs, lhs, rhs, op);
+    return std::move(lhs);
+}
+
+template <typename F>
+inline Tensor ApplyDualOpInplace(float lhs, Tensor&& rhs, F op) {
+    // Swap left and right
+    return ApplyDualOpInplace(std::move(rhs), lhs, ReverseOp(op));
+}
+
+// ------------------------------- Transpose -----------------------------------
+
+template <typename ViewF>
+static void ChangeTensorView(float* ret_data,
+                              const float* src_data, size_t size,
+                              ViewF view_func) {
+    // Copy under view conversion function
+    for(int src_idx = 0; src_idx < size; src_idx++){
+        const int ret_idx = view_func(src_idx);
+        ret_data[ret_idx] = src_data[src_idx];
+    }
+}
+
+
+static Tensor TransposeTensor(const Tensor& src) {
+    const Shape& src_shape = src.shape();
+
+    // Create result shape
+    Shape ret_shape;
+    std::reverse_copy(src_shape.begin(), src_shape.end(),
+                      back_inserter(ret_shape));
+    // Create result array
+    Tensor ret(ret_shape);
+
+    // Pre-compute child sizes
+    const std::vector<int> src_child_sizes = ComputeChildSizes(src_shape);
+    const std::vector<int> ret_child_sizes = ComputeChildSizes(ret_shape);
+
+    // Apply view change
+    const size_t ndim = src_shape.size();
+    ChangeTensorView(ret.data(), src.data(), src.size(), [&](int src_idx) {
+        // Decompose
+        auto src_idxs = std::make_unique<int[]>(ndim);
+        for (size_t d = 0; d < ndim; d++) {
+            src_idxs[d] = src_idx / src_child_sizes[d];
+            src_idx -= src_idxs[d] * src_child_sizes[d];
+        }
+        // Compose (with inverting indices)
+        int ret_idx = 0;
+        for (size_t d = 0; d < ndim; d++) {
+            ret_idx += src_idxs[ndim - d - 1] * ret_child_sizes[d];
+        }
+        return ret_idx;
+    });
+    return ret;
+}
+
+static Tensor BroadcastToTensor(const Tensor& x, const Shape& shape) {
+    Tensor ret(shape);
+    return ApplyDualOpInplace(
+            std::move(ret), x, [](float, float r) { return r; }, false);
+}
+
+Tensor Transpose(const Tensor& x) {
+    return TransposeTensor(x);
 }
 
 // ------------------------------- Reshape Method ------------------------------
