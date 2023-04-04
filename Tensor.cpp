@@ -9,6 +9,10 @@
 #include <algorithm>
 #include <math.h>
 #include <random>
+#include <immintrin.h> // SIMD
+#include <numeric> // std::accumulate
+#include <thread> // std::thread
+#include <atomic>
 
 #include "Tensor.h"
 #include "Substance.h"
@@ -22,11 +26,87 @@ void ApplyOpSimple(Tensor& dst, const Tensor& lhs, const Tensor& rhs, F op);
 template <typename F>
 inline void ApplyOpSimple(Tensor& ret, const Tensor& src, F op);
 
+union U{
+    __m128 v;
+    float a[4];
+};
 
 template <typename F>
 void runOp(int size, F op){
     for(int i = 0; i < size; i++){
         op(i);
+    }
+}
+
+int Tensor::GetNumWorkers(){
+    return s_n_workers;
+}
+
+void Tensor::SetNumWorkers(int n_workers) {
+    s_n_workers = n_workers;
+}
+
+int Tensor::GetBatchScale() {
+    return s_batch_scale;
+}
+
+void Tensor::SetBatchScale(int batch_scale) {
+    s_batch_scale = batch_scale;
+}
+
+static void GetParallelParams(int size, int& n_workers, int& n_batch,
+                              int& batch_size) {
+    // Fetch the number of workers
+    n_workers = Tensor::GetNumWorkers();
+    if (n_workers <= 0) {
+        n_workers = static_cast<int>(std::thread::hardware_concurrency());
+    }
+    // Compute batch size and it number
+    n_batch = n_workers * Tensor::GetBatchScale();
+    batch_size = size / n_batch + (size % n_batch ? 1 : 0);
+    n_workers = std::min(n_workers, batch_size);
+}
+
+template <typename F, typename R>
+float RunParallelWithReduce(int size, F op, R reduce, float init_v) {
+    // Decide parallelization parameters
+    int n_workers = -1, n_batch = -1, batch_size = -1;
+    GetParallelParams(size, n_workers, n_batch, batch_size);
+
+    if (n_workers <= 1) {
+        // Single execution
+        float v = init_v;
+        for (int i = 0; i < size; i++) {
+            // Operation with reduction
+            v = reduce(v, op(i));
+        }
+        return v;
+    } else {
+        // Parallel execution
+        std::atomic<int> next_batch(0);
+        std::vector<std::thread> workers(static_cast<size_t>(n_workers));
+        std::vector<float> results(workers.size());
+        for (size_t t = 0; t < workers.size(); t++) {
+            workers[t] = std::thread([ =, &next_batch, &results ]() noexcept {
+                int batch_cnt = 0;
+                float v = init_v;
+                while ((batch_cnt = next_batch++) < n_batch) {
+                    for (int i = 0; i < batch_size; i++) {
+                        const int idx = batch_size * batch_cnt + i;
+                        if (size <= idx) {
+                            break;
+                        }
+                        // Operation with reduction
+                        v = reduce(v, op(idx));
+                    }
+                }
+                results[t] = v;
+            });
+        }
+        for (auto&& worker : workers) {
+            worker.join();
+        }
+        return std::accumulate(results.begin(), results.end(), init_v, reduce);
     }
 }
 
@@ -226,6 +306,8 @@ Tensor Tensor::Ones(S... shape){
 
 std::random_device Tensor::s_rand_seed;
 std::mt19937 Tensor::s_rand_engine(s_rand_seed());
+int Tensor::s_n_workers = Tensor::DEFAULT_N_WORKERS;
+int Tensor::s_batch_scale = Tensor::DEFAULT_BATCH_SCALE;
 
 void Tensor::Seed(){
     s_rand_engine = std::mt19937(s_rand_seed());
@@ -414,6 +496,24 @@ bool Tensor::requires_grad() const {
  * Apply a simple math operation across two tensors that have the same shape
  * Result of the operation is stored in dst tensor
 */
+
+#ifdef SIMD_methods
+template <typename F>
+void ApplyOpSimple(Tensor& dst, const Tensor& lhs, const Tensor& rhs, F op) {
+    float* dst_ = dst.id();
+    float* lhs_ = lhs.id();
+    float* rhs_ = rhs.id();
+    for(size_t i = 0; i < dst.size(); i = i + 4){
+        __m128 a = op(lhs_, rhs_);
+        U u;
+        u.v = a;
+        dst_[i] = u.a[3];
+        dst_[i+1] = u.a[2];
+        dst_[i+2] = u.a[1];
+        dst_[i+3] = u.a[0];
+    }
+}
+#else
 template <typename F>
 void ApplyOpSimple(Tensor& dst, const Tensor& lhs, const Tensor& rhs, F op) {
     float* dst_ = dst.id();
@@ -424,6 +524,7 @@ void ApplyOpSimple(Tensor& dst, const Tensor& lhs, const Tensor& rhs, F op) {
         dst_[i] = op(lhs_[i], rhs_[i]);
     }
 }
+#endif
 
 /**
  * ApplyOpSimple with only 1 source tensor
@@ -444,10 +545,6 @@ inline void ApplyOpSimple(Tensor& ret, const Tensor& src, F op) {
 template <typename F>
 inline void ApplyOpSimple(Tensor& ret, F op) {
     auto&& ret_data = ret.data();
-    /*
-    RunParallel(static_cast<int>(ret.size()),
-                [&](int i) { ret_data[i] = op(); });
-    */
     for(size_t i = 0; i < ret.size(); i++){
         ret_data[i] = op();
     }
@@ -704,6 +801,34 @@ Tensor ApplyDualOp(const Tensor& lhs, const Tensor& rhs, F op) {
 
 /* --------- Addition ------------ */
 
+class fast_add_{
+public:
+    __m128 operator()(const float* lhs, const float* rhs){
+        __m128 aa = _mm_set_ps(*(lhs), *(lhs+1), *(lhs+2), *(lhs+3));
+        __m128 bb = _mm_set_ps(*(rhs), *(rhs+1), *(rhs+2), *(rhs+3));
+        __m128 out = _mm_add_ps(aa, bb);
+        return out;
+    }
+
+    const float operator()(const float& lhs, const float& rhs) const {
+        __m128 aa = _mm_set_ps(lhs, lhs, lhs, lhs);
+        __m128 bb = _mm_set_ps(rhs, rhs, rhs, rhs);
+        __m128 out = _mm_add_ps(aa, bb);
+        U u;
+        u.v = out;
+        return u.a[0];
+    }
+    float operator()(const float& lhs, const float& rhs){
+        __m128 aa = _mm_set_ps(lhs, lhs, lhs, lhs);
+        __m128 bb = _mm_set_ps(rhs, rhs, rhs, rhs);
+        __m128 out = _mm_add_ps(aa, bb);
+        U u;
+        u.v = out;
+        return u.a[0];
+    }
+};
+
+
 Tensor operator+(const Tensor& lhs, const Tensor& rhs){
     if(lhs.shape() == rhs.shape()){
         Tensor ret(lhs.shape());
@@ -780,6 +905,32 @@ Tensor sub(const Tensor& lhs, const Tensor& rhs){
     return ret;
 }
 */
+class fast_sub_{
+public:
+    __m128 operator()(const float* lhs, const float* rhs){
+        __m128 aa = _mm_set_ps(*(lhs), *(lhs+1), *(lhs+2), *(lhs+3));
+        __m128 bb = _mm_set_ps(*(rhs), *(rhs+1), *(rhs+2), *(rhs+3));
+        __m128 out = _mm_sub_ps(aa, bb);
+        return out;
+    }
+
+    const float operator()(const float& lhs, const float& rhs) const {
+        __m128 aa = _mm_set_ps(lhs, lhs, lhs, lhs);
+        __m128 bb = _mm_set_ps(rhs, rhs, rhs, rhs);
+        __m128 out = _mm_mul_ps(aa, bb);
+        U u;
+        u.v = out;
+        return u.a[0];
+    }
+    float operator()(const float& lhs, const float& rhs){
+        __m128 aa = _mm_set_ps(lhs, lhs, lhs, lhs);
+        __m128 bb = _mm_set_ps(rhs, rhs, rhs, rhs);
+        __m128 out = _mm_mul_ps(aa, bb);
+        U u;
+        u.v = out;
+    }
+};
+
 
 Tensor sub(Tensor& lhs, Tensor& rhs){
     Tensor ret = ApplyDualOp(lhs, rhs, std::minus<float>());
@@ -816,6 +967,33 @@ Tensor operator-(float lhs, const Tensor& rhs){
 */
 
 // ---------- Multiplication -----------
+
+class fast_mul_{
+public:
+    __m128 operator()(const float* lhs, const float* rhs){
+        __m128 aa = _mm_set_ps(*(lhs), *(lhs+1), *(lhs+2), *(lhs+3));
+        __m128 bb = _mm_set_ps(*(rhs), *(rhs+1), *(rhs+2), *(rhs+3));
+        __m128 out = _mm_mul_ps(aa, bb);
+        return out;
+    }
+
+    const float operator()(const float& lhs, const float& rhs) const {
+        __m128 aa = _mm_set_ps(lhs, lhs, lhs, lhs);
+        __m128 bb = _mm_set_ps(rhs, rhs, rhs, rhs);
+        __m128 out = _mm_mul_ps(aa, bb);
+        U u;
+        u.v = out;
+        return u.a[0];
+    }
+    float operator()(const float& lhs, const float& rhs){
+        __m128 aa = _mm_set_ps(lhs, lhs, lhs, lhs);
+        __m128 bb = _mm_set_ps(rhs, rhs, rhs, rhs);
+        __m128 out = _mm_mul_ps(aa, bb);
+        U u;
+        u.v = out;
+        return u.a[0];
+    }
+};
 
 Tensor operator*(const Tensor& lhs, const Tensor& rhs){
     if(lhs.shape() == rhs.shape()){
@@ -893,6 +1071,176 @@ Tensor Tensor::square() const {
     return ret;
 }
 
+
+// --------------------------- Dot product --------------------------------
+
+/**
+ * Dot product for 1-d array
+*/
+static Tensor DotNdArray1d(const Tensor& lhs, const Tensor& rhs) {
+    const size_t size = lhs.size();
+    if (size != rhs.size()) {
+        throw std::runtime_error("Invalid size for inner product of 1D");
+    }
+    // Inner product of vectors
+    auto&& l_data = lhs.data();
+    auto&& r_data = rhs.data();
+    auto&& op = [&](int i) { return l_data[i] * r_data[i]; };
+    // Run in parallel
+    const float sum = RunParallelWithReduce(static_cast<int>(size), op,
+                                            std::plus<float>(), 0.f);
+    return {sum};
+}
+
+/**
+ * Computes dot product along columns
+*/
+static void DotTensor1d2dImplColMajor(
+    float* ret_data,
+    const float* l_data,
+    const float* r_data,
+    const int n_col, const int n_contract
+){
+    std::fill_n(ret_data, n_col, 0.f);
+    int r_idx = 0;
+    for(int l_idx = 0; l_idx < n_contract; l_idx++){
+        for(int col_cnt = 0; col_cnt < n_col; col_cnt++){
+            ret_data[col_cnt] += l_data[l_idx] * r_data[r_idx];
+            r_idx++;
+        }
+    }
+}
+
+/**
+ * Computes dot product along rows
+*/
+static void DotTensor1d2dImplRowMajor(
+    float* ret_data,
+    const float* l_data,
+    const float* r_data,
+    const int n_col, const int n_contract
+){
+    for( int col_cnt = 0; col_cnt < n_col; col_cnt++ ){
+        float sum = 0.f;
+        int r_idx = col_cnt;
+        for( int l_idx = 0; l_idx < n_contract; l_idx++ ){
+            sum += l_data[l_idx] * r_data[r_idx];
+            r_idx += n_col;
+        }
+        ret_data[col_cnt] = sum;
+    }
+}
+
+/**
+ * Returns either a column-major or row-major dot product function
+*/
+static auto SelectDot1d2dOp(const Shape& l_shape, const Shape& r_shape){
+
+    const int left = l_shape.end()[-1];
+    const int right = r_shape.end()[-2] * r_shape.end()[-1];
+    if( left * Tensor::DOT_CACHE_SCALE < right){
+        return DotTensor1d2dImplColMajor;
+    } else{
+        return DotTensor1d2dImplRowMajor;
+    }
+}
+
+/**
+ * Compute dot product of 2 tensors
+*/
+template <typename F1d2d>
+void DotTensorNdMdImpl(
+    float* ret_data, 
+    const float* l_data,
+    const float* r_data,
+    const int n_l, const int n_r,
+    const int ret_step, const int l_step, const int r_step, F1d2d op_1d2d
+){
+    const int& n_contract = l_step;
+    const int& n_col = ret_step;
+    const int& ret_idx_base = n_r;
+
+    int l_idx = 0;
+    int ret_idx0 = 0;
+    for (int l_cnt = 0; l_cnt < n_l; l_cnt++) {
+        int r_idx = 0;
+        int ret_idx = ret_idx0 * ret_step;
+        for (int r_cnt = 0; r_cnt < n_r; r_cnt++) {
+            op_1d2d(ret_data + ret_idx, l_data + l_idx, r_data + r_idx, n_col,
+                    n_contract);
+            r_idx += r_step;
+            ret_idx += ret_step;
+        }
+        l_idx += l_step;
+        ret_idx0 += ret_idx_base;
+    }
+}
+
+/**
+ * Compute dot product for multidimensional tensors
+*/
+static Tensor DotTensorNdMd(const Tensor& lhs, const Tensor& rhs){
+    const Shape& l_shape = lhs.shape();
+    const Shape& r_shape = rhs.shape();
+
+    const int n_contract = l_shape.end()[-1];
+    if (n_contract != r_shape.end()[-2]){
+        throw std::runtime_error("Invalid shape for dot product");
+    }
+
+    // Same as input minus last dim
+    Shape ret_shape(l_shape.begin(), l_shape.end() - 1);
+    ret_shape.insert(ret_shape.end(), r_shape.begin(), r_shape.end() - 2);
+    ret_shape.push_back(r_shape.back());
+
+    Tensor ret(ret_shape);
+
+    const int ret_step = r_shape.end()[-1]; // size of rhs last dim
+    const int l_step = n_contract; // size of steps to take on the lhs 
+    const int r_step = n_contract * ret_step;  // size of steps to take on the rhs
+
+    const int n_l = static_cast<int>(lhs.size()) / l_step; // nr. of steps we'll have to do on lhs
+    const int n_r = static_cast<int>(rhs.size()) / r_step; // nr. of steps we'll have to do on rhs
+
+    DotTensorNdMdImpl(ret.data(), lhs.data(), rhs.data(), n_l, n_r, ret_step, l_step, r_step, SelectDot1d2dOp(l_shape, r_shape));
+    return ret;
+}
+
+static Tensor DotTensor(const Tensor& lhs, const Tensor& rhs) {
+    const Shape& l_shape = lhs.shape();
+    const Shape& r_shape = rhs.shape();
+    if (lhs.size() == 0 || rhs.size() == 0) {
+        // Empty array
+        throw std::runtime_error("Dot product of empty array");
+    } else if (lhs.size() == 1) {
+        // Simple multiply (left)
+        return static_cast<float>(lhs) * rhs;
+    } else if (rhs.size() == 1) {
+        // Simple multiply (right)
+        return lhs * static_cast<float>(rhs);
+    } else if (l_shape.size() == 1 && r_shape.size() == 1) {
+        // Inner product of vector (1D, 1D)
+        return DotNdArray1d(lhs, rhs);
+    } else if (r_shape.size() == 1) {
+        // Broadcast right 1D array
+        const Shape shape(l_shape.begin(), l_shape.end() - 1);
+        return DotTensorNdMd(lhs, rhs.reshape(r_shape[0], 1)).reshape(shape);
+    } else {
+        // Basic matrix product
+        return DotTensorNdMd(lhs, rhs);
+    }
+}
+
+Tensor Tensor::dot(const Tensor& other) const{
+    //return DotTensor(*this, other);
+    Tensor ret = DotTensor(*this, other);
+    if(this->requires_grad() || other.requires_grad()){
+        ret.requires_grad(true);
+        ret.has_ctx = true;
+        ret.ctx = std::make_shared<dot_op>(this, other);
+    }
+    return ret;
+}
 
 // --------------------------- Print tensor --------------------------------
 

@@ -240,6 +240,7 @@ TEST_CASE("Operations"){
         Tensor out = Ops::tanh(t1);
         out.backward();
 
+        //* Assumes normal math.h exp not SIMD method for tanh computation
         CHECK(tensor_to_str(out) == "[-0.761594, 0, 0.761594, 0.964028, 0.995055, 0.999329, 0.999909]");
         CHECK(tensor_to_str(*t1.grad) == "[0.419974, 1, 0.419974, 0.0706508, 0.009866, 0.00134087, 0.000181556]");
     }
@@ -257,6 +258,17 @@ TEST_CASE("Operations"){
     SUBCASE("Tensor::square()"){
         Tensor out = t1.square();
         CHECK(tensor_to_str(out) == "[1, 0, 1, 4, 9, 16, 25]");
+    }
+
+
+    SUBCASE("Dot product"){
+        Tensor::SetNumWorkers(2);
+        Tensor t2 = Tensor::Uniform(Shape{32, 3, 16});
+        Tensor t3 = Tensor::Uniform(Shape{16, 2});
+
+        Tensor t4 = t2.dot(t3);
+
+        cout << "t4.shape(): " << t4.shape() << "\n";
     }
 
 }

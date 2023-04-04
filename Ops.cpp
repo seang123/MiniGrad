@@ -158,3 +158,38 @@ void exp_op::backward(const Tensor* out){
 Tensor exp_op::forward(){
     throw std::runtime_error("exp_op::forward() -- Not implemented!");
 }
+
+// ---------------- dot . product ------------------
+
+
+dot_op::dot_op(Tensor* left, Tensor* right) : Op(left, right){
+    this->left = left;
+    this->right = right;
+    this->parents.insert(left);
+    this->parents.insert(right);
+}
+
+/*
+    Y = (X^T)W + B
+    dL/dW = (dL/dW ^ T) X
+    dL/dX = (dL/dW) W
+
+    So 
+    dL/dW = out->grad * left
+    dL/dX = out->grad * right
+
+    out->grad is the upstream gradient which will be computed first in the operations chain
+
+*/
+void dot_op::backward(const Tensor* out){
+    if(left->requires_grad()){
+        left->grad = std::make_shared<Tensor>(*(out->grad) * *right);
+    }
+    if(right->requires_grad()){
+        right->grad = std::make_shared<Tensor>(*(out->grad) * *left);
+    }
+}
+
+Tensor dot_op::forward(){
+    throw std::runtime_error("dot_op::forward() -- Not implemented!");
+}

@@ -88,4 +88,14 @@ public:
     void backward(const Tensor*);
 };
 
+class dot_op : public Op{
+    Tensor* left;
+    Tensor* right;
+    std::set<Tensor*> parents;
+public:
+    dot_op(Tensor* left, Tensor* right);
+    Tensor forward();
+    void backward(const Tensor*);
+};
+
 #endif

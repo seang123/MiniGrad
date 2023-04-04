@@ -26,9 +26,21 @@ Linear::Linear(int in_size, int out_size, bool use_bias) : Module() {
     }
 }
 
-Tensor Linear::forward(const Tensor* t){
+Tensor Linear::forward(const Tensor& x){
+    // Compute the dot product between input x and this->weight
+    // y = xW^T + b
 
-}
+    /*
+    Input:  [n, m]
+    Weight: [m, p]
+    Out:    [n, p]
+    */
+    Tensor ret = x.dot(*weight);
+    if( use_bias ){
+        ret = ret + *bias;
+    }
+    return ret;
+};
 
 /**
  * Print a Linear layers in/out shape

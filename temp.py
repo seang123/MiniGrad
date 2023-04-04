@@ -100,7 +100,23 @@ def tanh_exp():
 
 
 
+def linear_layer():
+
+  #x = np.random.uniform(0, 1, size=(16, 32))
+  #x.astype(np.float32)
+  #x = torch.tensor(x)
+  x = torch.randn(32)
+  l1 = torch.nn.Linear(32, 2)
+
+  y = l1(x)
 
 
-tanh_exp()
+  print(y.shape)
+
+
+
+
+
+linear_layer()
+
 

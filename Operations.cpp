@@ -5,6 +5,9 @@
 #include <math.h>
 #include <xmmintrin.h>
 
+//#define FastExpComputation
+
+// Should be defined in math.h, but isn't showing as available
 #define M_LN2 0.69314718055994530942
 
 template <typename F>
@@ -24,9 +27,10 @@ inline void ApplyOpSimple(Tensor& ret, const Tensor& src, F op) {
     }
 }
 
-namespace Ops{
-
-__m128 BetterFastExpSse (__m128 x)
+/**
+ * A faster SIMD exp (e^) function
+*/
+static __m128 BetterFastExpSse (__m128 x)
 {
   const __m128 a = _mm_set1_ps ((1 << 22) / float(M_LN2));  // to get exp(x/2)
   const __m128i b = _mm_set1_epi32 (127 * (1 << 23));       // NB: zero shift!
@@ -36,15 +40,20 @@ __m128 BetterFastExpSse (__m128 x)
   return _mm_div_ps (_mm_castsi128_ps (s), _mm_castsi128_ps (t));
 }
 
+/**
+ * Extract a float from a __m128 vector by index [0, 4)
+*/
 template <unsigned i>
-float vectorGetByIndex( __m128 V ){
-
+static float vectorGetByIndex( __m128 V ){
     V = _mm_shuffle_ps(V, V, _MM_SHUFFLE(i, i, i, i));
     return _mm_cvtss_f32(V);
 }
 
+namespace Ops{
+
 template <typename T>
 static float _tanh(T y){
+#ifdef FastExpComputation
     // SIMD exp  ( 2x faster )
     // Has a small error at around 0.00X decimal points
     float t = 3.f;
@@ -52,9 +61,10 @@ static float _tanh(T y){
     auto a = BetterFastExpSse(2 * SSEa);
     float b = vectorGetByIndex<0>(a);
     return (b - 1) / (b + 1);
-
-    // Basic tanh eq
-    //return (exp(2 * y) - 1 ) / (exp(2 * y) + 1);
+#else
+    // Basic scalar arithmatic
+    return (exp(2 * y) - 1 ) / (exp(2 * y) + 1);
+#endif
 }
 
 template <typename T>

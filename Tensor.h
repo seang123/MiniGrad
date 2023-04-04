@@ -121,6 +121,8 @@ public:
 
     Tensor reduce_sum(int);
 
+    Tensor dot(const Tensor& other) const;
+
     // Overload index operator 
     float& operator[](const int);
     float& operator[](const Index&) const;
@@ -159,6 +161,15 @@ public:
     Tensor(FloatList<9> init_list);
 
 
+    static constexpr int DEFAULT_N_WORKERS = -1;
+    static constexpr int DEFAULT_BATCH_SCALE = 4;
+    static constexpr int DOT_CACHE_SCALE = 10;
+    static int s_n_workers;
+    static int s_batch_scale;
+    static int GetNumWorkers();
+    static void SetNumWorkers(int n_workers);
+    static int GetBatchScale();
+    static void SetBatchScale(int batch_scale);
 };
 
 template <typename F>
