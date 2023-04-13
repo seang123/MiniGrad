@@ -120,12 +120,4 @@ public:
 };
 
 
-class test_op : public Op{
-    Tensor* left;
-    Tensor* right;
-    int exponent;
-public:
-    test_op(Tensor* left, Tensor* right, int exponent);
-};
-
 #endif

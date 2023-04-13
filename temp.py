@@ -165,5 +165,28 @@ def polynomial_example():
       print("d", d.item(), d.grad)
 
 
-polynomial_example()
+#polynomial_example()
 
+
+def plot_polynomial():
+  a = -0.00243357
+  b = 0.853247
+  c = 0.000370452
+  d = -0.0928783
+
+  import matplotlib.pyplot as plt
+
+  x = np.linspace(-math.pi, math.pi, 2000)
+  y = np.sin(x)
+
+  f = lambda a, b, c, d, x: a + b*x + c*x**2 + d*x**3
+
+  y_pred = []
+  for i in range(len(x)):
+    y_pred.append( f(a, b, c, d, x[i]) )
+
+  plt.plot(y_pred)
+  plt.plot(y)
+  plt.show()
+
+plot_polynomial()

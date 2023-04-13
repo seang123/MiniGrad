@@ -13,6 +13,7 @@
 using InitShape = std::initializer_list<int>; //allows braced-list initlization - Tenor t = {1,2,3};
 using Shape = std::vector<int>;
 using Index = std::vector<int>;
+using Axis = std::vector<int>;
 
 //class Iter;
 class Op;
@@ -272,6 +273,9 @@ static void OutputArrayLine(std::ostream& os, const float* data,
 std::ostream& operator<<(std::ostream&, const Shape&);
 //static void OutputShape(std::ostream&, const Shape&);
 
+
+
+Tensor Sum(Tensor& x, const Axis& axes, bool keepdims);
 
 #endif
 

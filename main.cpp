@@ -229,7 +229,7 @@ void simple_example(){
         cout << "------\n";
     }*/
 
-    for(int i = 0; i < 50; i++ ){
+    for(int i = 0; i < 3000; i++ ){
         Tensor dx = Ops::power(x, 3); // 2000
         dx.name = "dx";
         Tensor dx2 = dx * d; // 2000
@@ -257,7 +257,6 @@ void simple_example(){
         if ( i % 2 == 0 ){
             cout << "Epoch: " << i << " loss: " << loss3 << "\n";
         }
-
         loss3.backward();
         /*cout << "a: " << a << *a.grad << "\n";
         cout << "b: " << b << *b.grad << "\n";
@@ -266,6 +265,11 @@ void simple_example(){
         cout << "\n";*/
         loss3.apply_grad(0.000001f);
     }
+
+    cout << "a: " << a << "\n";
+    cout << "b: " << b << "\n";
+    cout << "c: " << c << "\n";
+    cout << "d: " << d << "\n";
 
 }
 
@@ -276,6 +280,15 @@ int main()
     //simd();
     //myMLP();
     simple_example();
+
+    /*Tensor a = {0.5f};
+    Tensor b  = Tensor::Uniform(Shape{2000});
+    b = b.reshape(1, 2000);
+
+    Tensor c = a * b;
+    c.backward();
+
+    cout << "a: " << a << " " << *a.grad << "\n";*/
 
 
     return 0;

@@ -111,6 +111,14 @@ TEST_CASE("basic operations"){
         Tensor t3 = t1 + 1.f;
         CHECK(tensor_to_str(t3) == "[0, 2, 3, 4]");
     }
+
+
+    SUBCASE("Sum"){
+        Tensor a = {{1.f, 2.f, 3.f}, {11.f, 12.f, 13.f}}; // (2, 3)
+        Tensor b = Sum(a, {0}, false);
+        CHECK(tensor_to_str(b) == "[12, 14, 16]");
+    }
+
 }
 
 TEST_CASE("gradient accumulation"){

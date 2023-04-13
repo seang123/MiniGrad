@@ -567,7 +567,203 @@ inline void ApplyOpSimple(Tensor& ret, F op) {
     }
 }
 
-// --------------------------------------------------------------------
+// ---------------------------- Reduce ----------------------------------------
+static int ResolveAxis(int axis, size_t ndim, const std::string& name) {
+    // Resolve negative
+    const int ndim_i = static_cast<int>(ndim);
+    if (axis < 0) {
+        axis = ndim_i + axis;
+    }
+    // Check range
+    if (axis < 0 || ndim_i <= axis) {
+        std::stringstream ss;
+        ss << "Invalid axes for " << name;
+        ss << " (" << ndim << "vs" << axis << ")";
+        throw std::runtime_error(ss.str());
+    }
+    return axis;
+}
+
+static Axis ResolveAxis(const Axis& axes, size_t ndim, const std::string& name,
+                        bool sort = false, bool sort_order_normal = true) {
+    // Resolve for each
+    Axis ret_axes;
+    ret_axes.reserve(axes.size());
+    for (auto&& axis : axes) {
+        ret_axes.push_back(ResolveAxis(axis, ndim, name));
+    }
+    // Sort axes
+    if (sort) {
+        if (sort_order_normal) {
+            // Normal order
+            std::sort(ret_axes.begin(), ret_axes.end());
+        } else {
+            // Inverse order
+            std::sort(ret_axes.begin(), ret_axes.end(), std::greater<int>());
+        }
+    }
+    return ret_axes;
+}
+
+static Shape CheckReductable(const Shape& shape, const Axis& axes,
+                             bool keepdims) {
+    // Mark reduction axes
+    std::vector<char> mark(shape.size(), false);
+    const int n_shape = static_cast<int>(shape.size());
+    for (auto&& axis : axes) {
+        if (0 <= axis && axis < n_shape) {
+            mark[static_cast<size_t>(axis)] = true;
+        } else {
+            throw std::runtime_error("Invalid axes for reduction");
+        }
+    }
+
+    if (keepdims) {
+        // Pick up unmarked dimension
+        Shape ret_shape_pad;
+        for (size_t i = 0; i < mark.size(); i++) {
+            if (mark[i]) {
+                ret_shape_pad.push_back(1);
+            } else {
+                ret_shape_pad.push_back(shape[i]);
+            }
+        }
+        return ret_shape_pad;
+    } else {
+        // No necessary
+        return {};
+    }
+}
+
+static auto ComputeReduceSizes(const Shape& src_shape, const size_t axis) {
+    // Compute result shape
+    Shape ret_shape;
+    for (size_t dim = 0; dim < src_shape.size(); dim++) {
+        if (dim != axis) {
+            ret_shape.push_back(src_shape[dim]);
+        }
+    }
+    if (ret_shape.empty()) {  // For all reduction
+        ret_shape.push_back(1);
+    }
+
+    // Compute sizes
+    int n_upper = 1, n_lower = 1, n_reduce = 0;
+    for (size_t dim = 0; dim < src_shape.size(); dim++) {
+        // Sizes
+        if (dim < axis) {
+            n_upper *= src_shape[dim];
+        } else if (axis < dim) {
+            n_lower *= src_shape[dim];
+        } else {
+            n_reduce = src_shape[dim];
+        }
+    }
+
+    // Return
+    return std::make_tuple(std::move(ret_shape), n_upper, n_lower, n_reduce);
+}
+
+template <typename F>
+float ReduceAxisAll(float * data, const size_t size,
+                    const float init_v, F reduce_op) {
+    auto&& op = [&](int i) { return data[i]; };
+    const float ret = RunParallelWithReduce(static_cast<int>(size), op,
+                                            reduce_op, init_v);
+    return ret;
+}
+
+template <typename F>
+Tensor ReduceAxisOne(const Tensor& src, const size_t axis, const float init_v,
+                      F reduce_op) {
+    const Shape& src_shape = src.shape();
+
+    // Compute sizes
+    auto reduce_sizes = ComputeReduceSizes(src_shape, axis);
+    const Shape& ret_shape = std::get<0>(reduce_sizes);
+    const int n_upper = std::get<1>(reduce_sizes);
+    const int n_lower = std::get<2>(reduce_sizes);
+    const int n_reduce = std::get<3>(reduce_sizes);
+
+    // Create result array with fill
+    Tensor ret(ret_shape, init_v);
+
+    auto&& src_data = src.data();
+    auto&& ret_data = ret.data();
+
+    // Reduce function
+    auto&& reduce = [=](int u_idx) {
+        const int ret_idx_base = u_idx * n_lower;
+        const int src_idx_base0 = u_idx * n_reduce * n_lower;
+        for (int redu_idx = 0; redu_idx < n_reduce; redu_idx++) {
+            const int src_idx_base1 = src_idx_base0 + redu_idx * n_lower;
+            for (int l_idx = 0; l_idx < n_lower; l_idx++) {
+                // Reduce
+                float& r = ret_data[ret_idx_base + l_idx];
+                const float s = src_data[src_idx_base1 + l_idx];
+                r = reduce_op(r, s);
+            }
+        }
+    };
+
+    // TODO: Run parallel for `axis == 0` (means `n_upper == 1`)
+
+#if 0  // Run in parallel
+    RunParallel(n_upper, reduce);
+#else  // Run sequentially
+    for (int u_idx = 0; u_idx < n_upper; u_idx++) {
+        reduce(u_idx);
+    }
+#endif
+    return ret;
+}
+
+template <typename F>
+Tensor ReduceAxis(Tensor& src, const Axis& axes_raw, bool keepdims,
+                   const float init_v, F reduce_op) {
+    if (axes_raw.size() == 0) {
+        // No Axis -> Reduce all
+        float ret_v = ReduceAxisAll(src.data(), src.size(), init_v, reduce_op);
+        Tensor ret = {ret_v};
+        // Reshape for keepdims
+        if (keepdims) {
+            Shape ret_shape(src.shape().size(), 1);
+            ret = ret.reshape(ret_shape);
+        }
+        return ret;
+    } else {
+        // Resolve axes (sort: on)
+        const Axis& axes = ResolveAxis(axes_raw, src.ndim(), "Reduce", true);
+
+        // Check it is possible to reduce.
+        Shape src_shape = src.shape();
+        const Shape& ret_shape_pad = CheckReductable(src_shape, axes, keepdims);
+
+        // Reduce axes one by one
+        Tensor ret;
+        for (size_t i = 0; i < axes.size(); i++) {
+            // From back
+            const size_t axis = static_cast<size_t>(axes[axes.size() - i - 1]);
+            // Reduce
+            if (i == 0) {
+                ret = ReduceAxisOne(src, axis, init_v, reduce_op);
+            } else {
+                ret = ReduceAxisOne(ret, axis, init_v, reduce_op);
+            }
+        }
+
+        // Reshape for keepdims
+        if (keepdims) {
+            ret = ret.reshape(ret_shape_pad);
+        }
+        return ret;
+    }
+}
+
+
+Tensor Sum(Tensor& x, const Axis& axes, bool keepdims) {
+    return ReduceAxis(x, axes, keepdims, 0.f, std::plus<float>());
+}
 
 // --------------------- Broadcasting tensors -----------------------
 /**
@@ -894,6 +1090,7 @@ Tensor operator+(Tensor& lhs, float rhs){
 */
 Tensor add(Tensor& lhs, Tensor& rhs){
     Tensor ret = ApplyDualOp(lhs, rhs, std::plus<float>());
+    ret.requires_grad(false);
     if(lhs.requires_grad() || rhs.requires_grad()){ 
         ret.requires_grad(true); 
         //* The output stores referenecs to the parent tensors as well as what operation produced it
@@ -959,6 +1156,7 @@ public:
 
 Tensor sub(Tensor& lhs, Tensor& rhs){
     Tensor ret = ApplyDualOp(lhs, rhs, std::minus<float>());
+    ret.requires_grad(false);
     if(lhs.requires_grad() || rhs.requires_grad()){
         ret.requires_grad(true);
         ret.ctx = std::make_shared<Sub_op>(&lhs, &rhs);
@@ -1047,6 +1245,7 @@ Tensor operator*(float lhs, const Tensor& rhs){
 
 Tensor mul(Tensor& lhs, Tensor& rhs){
     Tensor ret = ApplyDualOp(lhs, rhs, std::multiplies<float>());
+    ret.requires_grad(false);
     if(lhs.requires_grad() || rhs.requires_grad()){
         ret.requires_grad(true);
         ret.ctx = std::make_shared<Mul_op>(&lhs, &rhs);
@@ -1082,6 +1281,7 @@ struct divides {
 Tensor div(Tensor& lhs, Tensor& rhs){
     //Tensor ret = ApplyDualOp(lhs, rhs, std::divides<float>());
     Tensor ret = ApplyDualOp(lhs, rhs, divides<float>());
+    ret.requires_grad(false);
     if(lhs.requires_grad() || rhs.requires_grad()){
         ret.requires_grad(true);
         ret.ctx = std::make_shared<div_op>(&lhs, &rhs);
@@ -1688,6 +1888,7 @@ void Tensor::backward(){
     //for(auto& n : g.nodes){
     for(Tensor* n: g.nodes){
         if( n->has_ctx == true ){
+            //std::cout << "calling backward() for " << n->name << "\n";
             n->ctx->backward(n);
         }
     }

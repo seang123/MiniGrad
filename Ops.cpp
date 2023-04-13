@@ -1,7 +1,9 @@
 
+// #define NDEBUG // if defined disables assert statements
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <assert.h>
 
 #include "Ops.h"
 #include "Tensor.h"
@@ -56,26 +58,36 @@ Add_op::Add_op(Tensor* left, Tensor* right)
 */
 void Add_op::backward(const Tensor* out){
     if(left->requires_grad()){
-        if(left->size() == 1){
-            left->grad = std::make_shared<Tensor>(out->grad->sum());
-        } else{
-            // compute gradient for left parent
-            //* left.grad += 1. * out.grad
-            left->grad = out->grad;
-            //* left.grad.shape == left.shape   (may require reshape)
-            //left->grad = std::make_shared<Tensor>(left->grad->reshape(left->shape()));
+        Shape lhs_shape = left->shape();
+        left->grad = std::make_shared<Tensor>(lhs_shape, 0.f);
+        std::vector<int> axis_to_reduce;
+        Tensor temp = *out->grad;
+        for(int i = 0; i < lhs_shape.size(); i++){
+            if( lhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
         }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *left->grad = *left->grad + temp;
+        assert(left->grad->shape() == left->shape());
     }
     if(right->requires_grad()){
-        if(right->size() == 1){
-            right->grad = std::make_shared<Tensor>(out->grad->sum());
-        } else{
-            // compute gradient for right parent
-            //* right.grad += 1. * out.grad
-            right->grad = out->grad;
-            //* right.grad.shape == right.shape   (may require reshape)
-            //right->grad = std::make_shared<Tensor>(right->grad->reshape(right->shape()));
+        Shape rhs_shape = right->shape();
+        right->grad = std::make_shared<Tensor>(rhs_shape, 0.f);
+        std::vector<int> axis_to_reduce;
+        Tensor temp = *out->grad;
+        for(int i = 0; i < rhs_shape.size(); i++){
+            if( rhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
         }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *right->grad = *right->grad + temp;
+        assert(right->grad->shape() == right->shape());
     }
 }
 
@@ -96,18 +108,37 @@ Sub_op::Sub_op(Tensor* left, Tensor* right)
 
 void Sub_op::backward(const Tensor* out){
     if(left->requires_grad()){
-        // compute gradient for left parent
-        //* left.grad += 1. * out.grad
-        left->grad = out->grad;
-        //* left.grad.shape == left.shape   (may require reshape)
-        //left->grad = std::make_shared<Tensor>(left->grad->reshape(left->shape()));
+        Shape lhs_shape = left->shape();
+        left->grad = std::make_shared<Tensor>(lhs_shape, 0.f);
+        std::vector<int> axis_to_reduce;
+        Tensor temp = *out->grad;
+        for(int i = 0; i < lhs_shape.size(); i++){
+            if( lhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
+        }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *left->grad = *left->grad + temp;
+        assert(left->grad->shape() == left->shape());
     }
+
     if(right->requires_grad()){
-        // compute gradient for right parent
-        //* right.grad += 1. * out.grad
-        right->grad = out->grad;
-        //* right.grad.shape == right.shape   (may require reshape)
-        //right->grad = std::make_shared<Tensor>(right->grad->reshape(right->shape()));
+        Shape rhs_shape = right->shape();
+        right->grad = std::make_shared<Tensor>(rhs_shape, 0.f);
+        std::vector<int> axis_to_reduce;
+        Tensor temp = *out->grad;
+        for(int i = 0; i < rhs_shape.size(); i++){
+            if( rhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
+        }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *right->grad = *right->grad + temp;
+        assert(right->grad->shape() == right->shape());
     }
 }
 
@@ -128,25 +159,37 @@ div_op::div_op(Tensor* left, Tensor* right)
 
 void div_op::backward(const Tensor* out){
     if(left->requires_grad()){
-        //* left.grad = right.values * out_grad
-        if (left->size() == 1){
-            Tensor temp = out->grad->sum();
-            Tensor temp_right = right->sum();
-            left->grad = std::make_shared<Tensor>(temp_right * temp);
-        } else{
-            left->grad = std::make_shared<Tensor>((*right) * (*out->grad));
+        Shape lhs_shape = left->shape();
+        std::vector<int> axis_to_reduce;
+        left->grad = std::make_shared<Tensor>(left->shape(), 0.f);
+        Tensor temp = *right * *(out->grad);
+        left->grad = std::make_shared<Tensor>(lhs_shape, 0.f);
+        for(int i = 0; i < lhs_shape.size(); i++){
+            if( lhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
         }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *left->grad = *left->grad + temp;
+        assert(left->grad->shape() == left->shape());
     }
     if(right->requires_grad()){
-        //* right.grad = left.values * out_grad
-        if (right->size() == 1){
-            //Tensor temp = left->sum();
-            Tensor temp = out->grad->sum();
-            Tensor temp_left = left->sum();
-            right->grad = std::make_shared<Tensor>(temp_left * temp);
-        } else{
-            right->grad = std::make_shared<Tensor>((*left) * (*out->grad));
+        Shape rhs_shape = right->shape();
+        std::vector<int> axis_to_reduce;
+        right->grad = std::make_shared<Tensor>(right->shape(), 0.f);
+        Tensor temp = *left * *(out->grad); 
+        for(int i = 0; i < rhs_shape.size(); i++){
+            if( rhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
         }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *right->grad = *right->grad + temp;
+        assert(right->grad->shape() == right->shape());
     }
 }
 
@@ -166,27 +209,40 @@ Mul_op::Mul_op(Tensor* left, Tensor* right)
 }
 
 void Mul_op::backward(const Tensor* out){
+    //* left.grad = right.values * out_grad
+    //* right.grad = left.values * out_grad
     if(left->requires_grad()){
-        //* left.grad = right.values * out_grad
-        if (left->size() == 1){
-            //! b * x == [1] * [2000]
-            Tensor temp = out->grad->sum();
-            Tensor temp_right = right->sum() / (float)right->size();
-            left->grad = std::make_shared<Tensor>(temp_right * temp);
-        } else{
-            left->grad = std::make_shared<Tensor>((*right) * (*out->grad));
+        Shape lhs_shape = left->shape();
+        std::vector<int> axis_to_reduce;
+        left->grad = std::make_shared<Tensor>(left->shape(), 0.f);
+        Tensor temp = *right * *(out->grad);
+        left->grad = std::make_shared<Tensor>(lhs_shape, 0.f);
+        for(int i = 0; i < lhs_shape.size(); i++){
+            if( lhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
         }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *left->grad = *left->grad + temp;
+        assert(left->grad->shape() == left->shape());
     }
     if(right->requires_grad()){
-        //* right.grad = left.values * out_grad
-        if (right->size() == 1){
-            //Tensor temp = left->sum();
-            Tensor temp = out->grad->sum();
-            Tensor temp_left = left->sum();
-            right->grad = std::make_shared<Tensor>(temp_left * temp);
-        } else{
-            right->grad = std::make_shared<Tensor>((*left) * (*out->grad));
+        Shape rhs_shape = right->shape();
+        std::vector<int> axis_to_reduce;
+        right->grad = std::make_shared<Tensor>(right->shape(), 0.f);
+        Tensor temp = *left * *(out->grad); 
+        for(int i = 0; i < rhs_shape.size(); i++){
+            if( rhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
         }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *right->grad = *right->grad + temp;
+        assert(right->grad->shape() == right->shape());
     }
 }
 
@@ -210,6 +266,7 @@ void tanh_op::backward(const Tensor* out){
         Tensor squared = out->square();
         Tensor temp = 1.f - squared;
         left->grad = std::make_shared<Tensor>( temp * (*out->grad) );
+        assert(left->grad->shape() == left->shape());
     }
 }
 
@@ -232,6 +289,7 @@ void exp_op::backward(const Tensor* out){
         Tensor copy = *out;
         //left->grad = std::make_shared<Tensor>(copy);
         left->grad = std::make_shared<Tensor>(copy * *(out->grad));
+        assert(left->grad->shape() == left->shape());
     }
 }
 
@@ -253,18 +311,15 @@ void pow_op::backward(const Tensor* out){
     if(left->requires_grad()){
         if(left->size() == 1){
             Tensor temp1 = Ops::power(*left, (this->pow)-1);
-            Tensor copy = this->pow * temp1; // n^m -> m*n**(m-1)
-            //Tensor temp2 ({1}, out->grad->size(), false);
-            Tensor temp3 = out->grad->sum();
-            //Tensor temp = temp3 / temp2;
-            Tensor temp = temp3 / (float)out->grad->size();
-            left->grad = std::make_shared<Tensor>(copy * temp);
-       } else{
+            Tensor copy  = this->pow * temp1; // n^m -> m*n**(m-1)
+            left->grad   = std::make_shared<Tensor>(copy * *out->grad);
+        } else{
             //Tensor copy = this->pow * Ops::power(*left, (this->pow)-1); // n^m -> m*n**(m-1)
             Tensor temp1 = Ops::power(*left, (this->pow)-1);
-            Tensor copy = this->pow * temp1; // n^m -> m*n**(m-1)
-            left->grad = std::make_shared<Tensor>(copy * *out->grad);
-       }
+            Tensor copy  = this->pow * temp1; // n^m -> m*n**(m-1)
+            left->grad   = std::make_shared<Tensor>(copy * *out->grad);
+        }
+        assert(left->grad->shape() == left->shape());
     }
 }
 
