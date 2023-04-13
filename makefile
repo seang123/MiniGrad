@@ -17,7 +17,6 @@ tests: tests.o tensor.o substance.o ops.o operations.o nn.o
 debug: main.o tensor.o substance.o ops.o operations.o nn.o
 	$(CXX) $(LDFLAGS) -o main main.o Tensor.o Substance.o Ops.o operations.o nn.o 
 
-
 main.o: main.cpp
 	$(CXX) -c $(LDFLAGS) main.cpp
 

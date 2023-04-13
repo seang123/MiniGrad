@@ -201,33 +201,9 @@ void simple_example(){
         v = v + inter;
     }
 
-    //y_pred = a + b * x + c * x ** 2 + d * x ** 3
 
-    //y_pred = a + b * x + c * x ** 2 + d * x ** 3
-    /*for(int i = 0; i < 2; i++){
-        Tensor b_x = b * x;
-        int temp = 3;
-        Tensor x_pow_3 = Ops::power(x, temp);
-        Tensor x_pow_2 = Ops::square(x);
-        Tensor c_x = c * x_pow_2;
-        Tensor d_x = d * x_pow_3;
-        Tensor a_b = a + b_x;
-        Tensor c_a = a_b + c_x;
-        Tensor out = c_a + d_x;
-
-        Tensor loss1 = out - y;
-        Tensor loss2 = Ops::square(loss1);
-        Tensor loss3 = loss2.sum();
-        cout << loss1[0] << " " << loss1[1] << "\n";
-        cout << out[0] << " " << out[1] << "\n";
-        cout << y[0] << " " << y[1] << "\n";
-        if ( i % 1 == 0 ){
-            cout << "Epoch: " << i << " loss: " << loss3 << "\n";
-        }
-        loss3.backward();
-        loss3.apply_grad(0.000001f);
-        cout << "------\n";
-    }*/
+    Timer<> clock;
+    clock.tic();
 
     for(int i = 0; i < 3000; i++ ){
         Tensor dx = Ops::power(x, 3); // 2000
@@ -265,6 +241,11 @@ void simple_example(){
         cout << "\n";*/
         loss3.apply_grad(0.000001f);
     }
+
+    clock.toc();
+
+    std::cout << "time: " << clock.duration<std::chrono::milliseconds>().count() << "\n";
+
 
     cout << "a: " << a << "\n";
     cout << "b: " << b << "\n";

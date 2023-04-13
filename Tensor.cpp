@@ -10,11 +10,13 @@
 #include <math.h>
 #include <random>
 #include <immintrin.h> // SIMD
-#include <intrin.h>
+//#include <intrin.h> // throws an error when compiling with WSL
+#include <x86intrin.h>
 #include <smmintrin.h>
 #include <numeric> // std::accumulate
 #include <thread> // std::thread
 #include <atomic>
+//#include <pthread.h>
 
 #include "Tensor.h"
 #include "Substance.h"

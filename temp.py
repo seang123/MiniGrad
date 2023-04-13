@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import math
+import time
 
 np.random.seed(42)
 
@@ -141,7 +142,9 @@ def polynomial_example():
   d = torch.tensor([1.06652], device=device, dtype=dtype, requires_grad=True)
 
   learning_rate = 1e-6
-  for t in range(1):
+  loss_hist = []
+  start_t = time.perf_counter()
+  for t in range(2000):
       # Forward pass: compute predicted y using operations on Tensors.
       y_pred = a + b * x + c * x ** 2 + d * x ** 3
 
@@ -150,8 +153,9 @@ def polynomial_example():
       # loss.item() gets the scalar value held in the loss.
       loss = (y_pred - y).pow(2).sum()
       #if t % 100 == 99:
-      #    print(t, loss.item())
-      print("loss:", loss.item())
+      #    print(t, '-', loss.item())
+      #print("loss:", loss.item())
+      loss_hist.append(loss.item())
 
       # Use autograd to compute the backward pass. This call will compute the
       # gradient of loss with respect to all Tensors with requires_grad=True.
@@ -159,13 +163,29 @@ def polynomial_example():
       # the gradient of the loss with respect to a, b, c, d respectively.
       loss.backward()
 
-      print("a", a.item(), a.grad)
-      print("b", b.item(), b.grad)
-      print("c", c.item(), c.grad)
-      print("d", d.item(), d.grad)
+      #print("a", a.item(), a.grad)
+      #print("b", b.item(), b.grad)
+      #print("c", c.item(), c.grad)
+      #print("d", d.item(), d.grad)
+
+      with torch.no_grad():
+        a -= learning_rate * a.grad
+        b -= learning_rate * b.grad
+        c -= learning_rate * c.grad
+        d -= learning_rate * d.grad
+
+        # Manually zero the gradients after updating weights
+        a.grad = None
+        b.grad = None
+        c.grad = None
+        d.grad = None
+      
+  end_t = time.perf_counter()
+  print(f"time: {(end_t - start_t):.4f}")
+  print("final loss: ", loss_hist[-1])
 
 
-#polynomial_example()
+polynomial_example()
 
 
 def plot_polynomial():

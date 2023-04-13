@@ -13,6 +13,10 @@ Compile with makefile or:
 
     g++ -std=c++17 -static main.cpp Tensor.cpp Substance.cpp Ops.cpp Operations.cpp
 
+For wsl:
+
+    g++ -pthread -std=c++17 -c main.cpp Tensor.cpp Substance.cpp Ops.cpp Operations.cpp nn.o
+    g++ -pthread -std=c++17 -o main.o tensor.o substance.o ops.o operations.o nn.o
 
 ---
 
