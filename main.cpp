@@ -6,6 +6,7 @@
 
 #include "Tensor.h"
 #include "Operations.h"
+#include "nn.h"
 
 //#define TINYNDARRAY_IMPLEMENTATION
 //#include "tinyndarray.h"
@@ -76,14 +77,16 @@ void timing(){
     Timer<> clock;
 
     clock.tic();
+    Tensor::Seed(42);
     Tensor t1 = Tensor::Uniform(Shape{50, 28, 28});
     t1.requires_grad(true);
+    Tensor::Seed(42);
     Tensor t2 = Tensor::Uniform(Shape{50, 28, 28});
     t2.requires_grad(true);
 
+    Tensor::Seed(42);
     Tensor t3 = Tensor::Uniform(Shape{50, 28, 28});
     t3.requires_grad(true);
-
     clock.toc();
     std::cout << "Tensor creation: " << clock.duration().count() << "\n";
 
@@ -91,7 +94,7 @@ void timing(){
     clock.tic();
     Tensor t4 = t1 + t2;
     Tensor t5 = t3 * t4;
-    //t5 = Ops::tanh(t5);
+    t5 = Ops::tanh(t5);
     clock.toc();
 
     std::cout << "Operation: " << clock.duration<std::chrono::microseconds>().count() << "\n";
@@ -106,76 +109,174 @@ void timing(){
     tt = Ops::tanh(tt);
     cout << tt << "\n";
 
+    Tensor::Seed(42);
+    Tensor t_l = Tensor::Uniform(Shape{128, 784});
+    Tensor::Seed(42);
+    Tensor t_r = Tensor::Uniform(Shape{784, 32});
+    clock.tic();
+    Tensor dot = t_l.dot(t_r);
+    clock.toc();
+    std::cout << dot.shape() << "\n";
+    std::cout << "Dot-prod: " << clock.duration<std::chrono::microseconds>().count() << "\n";
+
 }
 
-union U {
-    __m128 v;
-    float a[4];
-};
 
-template <int offsetRegs>
-inline __m128 mul8(const float* p1, const float* p2){
-    constexpr int lanes = offsetRegs * 4;
-    const __m128 a = _mm_loadu_ps( p1 + lanes );
-    const __m128 b = _mm_loadu_ps( p2 + lanes );
-    return _mm_mul_ps(a, b);
-};
+/**
+ * Example model class for a MLP
+*/
+class MyModel : nn::Module{
+public:
+    nn::Linear l1;
+    nn::Linear l2;
+    nn::Linear l3;
+    MyModel()
+    : l1(nn::Linear(32, 16))
+    , l2(nn::Linear(16, 2))
+    , l3(nn::Linear(2, 1))
+    {}
 
-void simd(){
-
-    std::vector<float> a  = {1.f, 2.f, 3.f, 4.f, 5.f};
-    std::vector<float> b  = {11.f, 22.f, 33.f, 44.f, 55.f};
-    const float* p1 = a.data();
-    const float* p2 = b.data();
-
-    __m128 dot0 = mul8<0>(p1, p2);
-    __m128 dot1 = mul8<1>(p1, p2);
-     
-    U u;
-    u.v = dot0;
-    std::cout << u.a[0] << "\n";
-    std::cout << u.a[1] << "\n";
-    std::cout << u.a[2] << "\n";
-    std::cout << u.a[3] << "\n";
-
-    u.v = dot1;
-    std::cout << u.a[0] << "\n";
-
-    std::cout << "-----\n";
-    int size_ = 100000;
-    int t1[size_];
-    int t2[size_];
-    for(int i = 0; i < size_; i++){
-        t1[i] = i;
-        t2[i] = i;
+    Tensor forward(Tensor& x){
+        Tensor a = l1(x);
+        Tensor b = l2(a);
+        Tensor c = l3(b);
+        return c;
     }
 
-    float out[size_];
-
-    Timer<> clock;
-    clock.tic();
-    for(int i = 0; i < size_; i=i+4){
-        __m128 a = _mm_set_ps( t1[i], t1[i+1], t1[i+2], t1[i+3] );
-        __m128 b = _mm_set_ps( t2[i], t2[i+1], t2[i+2], t2[i+3] );
-        __m128 c = _mm_add_ps(a, b);
-        U u;
-        u.v = c;
-        out[i] = u.a[0];
-        out[i+1] = u.a[1];
-        out[i+2] = u.a[2];
-        out[i+3] = u.a[3];
+    // call operator
+    Tensor operator()(Tensor& x){
+        return forward(x);
     }
-    clock.toc();
-    std::cout << "SIMD: " << clock.duration<std::chrono::microseconds>().count() << "\n";
+};
 
+void myMLP(){
+    Tensor::Seed(42);
+    MyModel net;
+
+    Tensor input_ = Tensor::Uniform(0, 1, Shape{8, 32});
+    Tensor out = net(input_);
+
+    out.backward();
+
+    //std::shared_ptr<Tensor> l1_w = net.l1.get_weights();
+    //cout << *l1_w << "\n";
+
+    // Apply the gradients to the tensors
+    out.apply_grad(0.001f);
+
+
+    cout << "end.\n";
+
+}
+
+void simple_example(){
+
+    Tensor::Seed(42);
+    Tensor a = Tensor::Normal(Shape{1});
+    a.name = 'a';
+    Tensor::Seed(43);
+    Tensor b = Tensor::Normal(Shape{1});
+    b.name = 'b';
+    Tensor::Seed(44);
+    Tensor c = Tensor::Normal(Shape{1});
+    c.name = 'c';
+    Tensor::Seed(45);
+    Tensor d = Tensor::Normal(Shape{1});
+    d.name = 'd';
+
+    cout << a << " " << b << " " << c << " " << d << "\n";
+
+    Tensor x (Shape{2000});
+    x.name = 'x';
+    x.requires_grad(false);
+    Tensor y (Shape{2000});
+    y.requires_grad(false);
+    y.name = 'y';
+    float v = -3.14f;
+    float inter = (-1 * v * 2) / 2000;
+    std::cout << inter << "\n";
+    for(int i = 0; i < 2000; i++){
+        x[i] = v;
+        y[i] = std::sin(v);
+        v = v + inter;
+    }
+
+    //y_pred = a + b * x + c * x ** 2 + d * x ** 3
+
+    //y_pred = a + b * x + c * x ** 2 + d * x ** 3
+    /*for(int i = 0; i < 2; i++){
+        Tensor b_x = b * x;
+        int temp = 3;
+        Tensor x_pow_3 = Ops::power(x, temp);
+        Tensor x_pow_2 = Ops::square(x);
+        Tensor c_x = c * x_pow_2;
+        Tensor d_x = d * x_pow_3;
+        Tensor a_b = a + b_x;
+        Tensor c_a = a_b + c_x;
+        Tensor out = c_a + d_x;
+
+        Tensor loss1 = out - y;
+        Tensor loss2 = Ops::square(loss1);
+        Tensor loss3 = loss2.sum();
+        cout << loss1[0] << " " << loss1[1] << "\n";
+        cout << out[0] << " " << out[1] << "\n";
+        cout << y[0] << " " << y[1] << "\n";
+        if ( i % 1 == 0 ){
+            cout << "Epoch: " << i << " loss: " << loss3 << "\n";
+        }
+        loss3.backward();
+        loss3.apply_grad(0.000001f);
+        cout << "------\n";
+    }*/
+
+    for(int i = 0; i < 50; i++ ){
+        Tensor dx = Ops::power(x, 3); // 2000
+        dx.name = "dx";
+        Tensor dx2 = dx * d; // 2000
+        dx2.name = "dx2";
+        Tensor cx = Ops::power(x, 2); // 2000
+        cx.name = "cx";
+        Tensor cx2 = cx * c; // 2000
+        cx2.name = "cx2";
+        Tensor bx = b * x;
+        bx.name = "bx";
+        Tensor dc = dx2 + cx2;
+        dc.name = "dc";
+        Tensor dcb = dc + bx;
+        dcb.name = "dcb";
+        Tensor dcba = dcb + a;
+        dcba.name = "dcba";
+
+        Tensor loss1 = dcba - y; // 2000
+        loss1.name = "loss1";
+        Tensor loss2 = Ops::power(loss1, 2); // 2000
+        loss2.name = "loss2";
+        Tensor loss3 = loss2.sum(); // 1
+        loss3.name = "loss3";
+
+        if ( i % 2 == 0 ){
+            cout << "Epoch: " << i << " loss: " << loss3 << "\n";
+        }
+
+        loss3.backward();
+        /*cout << "a: " << a << *a.grad << "\n";
+        cout << "b: " << b << *b.grad << "\n";
+        cout << "c: " << c << *c.grad << "\n";
+        cout << "d: " << d << *d.grad << "\n";
+        cout << "\n";*/
+        loss3.apply_grad(0.000001f);
+    }
 
 }
 
 
 int main()
 {
-    timing();
+    //timing();
     //simd();
+    //myMLP();
+    simple_example();
+
 
     return 0;
 }

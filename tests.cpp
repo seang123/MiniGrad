@@ -8,6 +8,7 @@
 #include "doctest.h"
 #include "Ops.h"
 #include "Operations.h"
+#include "nn.h"
 
 //using namespace Ops;
 using std::cout;
@@ -294,4 +295,23 @@ TEST_CASE("Random"){
         CHECK(tensor_to_str(t1) == tensor_to_str(t2));
     }
 
+}
+
+
+TEST_CASE("NN"){
+    SUBCASE("linear"){
+        Tensor::Seed(42);
+        Tensor t = {{1.f, 2.f, 3.f}, {4.f, 5.f, 6.f}}; // 2 x 3
+        t.requires_grad(true);
+        nn::Linear l1 = nn::Linear(3, 2, true); // 3 x 2
+        nn::Linear l2 = nn::Linear(2, 1, true);
+
+        Tensor y = l1.forward(t);
+        Tensor y2 = l2.forward(y);
+        cout << y2 << "\n";
+
+        y2.backward();
+        cout << *t.grad << "\n";
+
+    }
 }

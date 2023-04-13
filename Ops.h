@@ -67,6 +67,16 @@ public:
     void backward(const Tensor*);
 };
 
+class div_op : public Op{
+    Tensor* left;
+    Tensor* right;
+    std::set<Tensor*> parents;
+public:
+    div_op(Tensor* left, Tensor* right);
+    Tensor forward();
+    //void backward(std::shared_ptr<Tensor>);
+    void backward(const Tensor*);
+};
 
 class tanh_op : public Op{
     Tensor* left;
@@ -88,6 +98,17 @@ public:
     void backward(const Tensor*);
 };
 
+class pow_op : public Op{
+    Tensor* left;
+    Tensor* right;
+    float pow;
+    std::set<Tensor*> parents;
+public:
+    pow_op(Tensor* left, float pow);
+    Tensor forward();
+    void backward(const Tensor*);
+};
+
 class dot_op : public Op{
     Tensor* left;
     Tensor* right;
@@ -96,6 +117,15 @@ public:
     dot_op(Tensor* left, Tensor* right);
     Tensor forward();
     void backward(const Tensor*);
+};
+
+
+class test_op : public Op{
+    Tensor* left;
+    Tensor* right;
+    int exponent;
+public:
+    test_op(Tensor* left, Tensor* right, int exponent);
 };
 
 #endif

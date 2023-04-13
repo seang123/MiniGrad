@@ -77,6 +77,7 @@ work around is to create a 2x3 and then reshape to 2x3x1
 
     - Think this was becuase of the move constructor only copying the substance and nothing else / think I fixed it but haven't checked
 
+
 # TODO
 
 - [ ] neural network modules (linear, conv, ...)
@@ -89,3 +90,17 @@ work around is to create a 2x3 and then reshape to 2x3x1
 
 - [ ] refactor some of the operations methods to take const parameters
 
+# Notes
+
+Surprisingly converting the tanh operation to use SIMD instructions while still only working on 1 value at a time is much faster than what the compiler can 
+achieve with -O3. However, working one 4 values at a time didn't seem to give any speeds ups, so the compiler must be unrolling the loop already.
+
+
+
+# R-value refs and gradients
+
+Tensor operator+(Tensor&& lhs, Tensor&& rhs) - allowes for following notation:
+Tensor a; Tensor b; Tensor c;
+Tensor d = (a + b) + c;
+(a + b) results in a temporary value (Tensor&&) which is added to a, in this case, l-value tensor 'c'.
+(a + b) result has a ctx and will compute gradients

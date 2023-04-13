@@ -5,7 +5,7 @@
 #include <math.h>
 #include <xmmintrin.h>
 
-//#define FastExpComputation
+#define FastExpComputation
 
 // Should be defined in math.h, but isn't showing as available
 #define M_LN2 0.69314718055994530942
@@ -51,21 +51,25 @@ static float vectorGetByIndex( __m128 V ){
 
 namespace Ops{
 
+
 template <typename T>
 static float _tanh(T y){
 #ifdef FastExpComputation
     // SIMD exp  ( 2x faster )
     // Has a small error at around 0.00X decimal points
-    float t = 3.f;
     __m128 SSEa=_mm_load1_ps(&y);
-    auto a = BetterFastExpSse(2 * SSEa);
-    float b = vectorGetByIndex<0>(a);
-    return (b - 1) / (b + 1);
+    __m128 a = BetterFastExpSse(2 * SSEa);
+    __m128 out = _mm_div_ps(a - 1.f, a + 1.f);
+    //return vectorGetByIndex<0>(out);
+    return _mm_cvtss_f32(out);
+    /*float b = vectorGetByIndex<0>(a);
+    return (b - 1) / (b + 1);*/
 #else
     // Basic scalar arithmatic
     return (exp(2 * y) - 1 ) / (exp(2 * y) + 1);
 #endif
 }
+
 
 template <typename T>
 static float _exp(T y){
@@ -130,14 +134,43 @@ Tensor pow(Tensor& t, T p){
     return ret;
 }
 
+Tensor power(Tensor& t, float p){
+    Tensor ret (t.shape());
+    _pow<float> to_the_power(p);
+    ApplyOpSimple(ret, t, to_the_power);
+    if(t.requires_grad() == true){
+        ret.requires_grad(true);
+        ret.has_ctx = true;
+        ret.ctx = std::make_shared<pow_op>(&t, p);
+    }
+    return ret;
+}
+
+Tensor power(Tensor& t, int p){
+    Tensor ret (t.shape());
+    _pow<int> to_the_power(p);
+    ApplyOpSimple(ret, t, to_the_power);
+    if(t.requires_grad() == 1){
+        ret.requires_grad(true);
+        ret.has_ctx = true;
+        ret.ctx = std::make_shared<pow_op>(&t, p);
+    }
+    return ret;
+}
+
 /**
  * Square the values in a tensor
 */
 Tensor square(Tensor& t){
-    Tensor ret (t.shape());
-    _pow<float> to_the_power(2);
-    ApplyOpSimple(ret, t, to_the_power);
-    return ret;
+    /*Tensor ret = power(t, 2);
+    if(t.requires_grad()){
+        ret.requires_grad(true);
+        ret.has_ctx = true;
+        ret.ctx = std::make_shared<pow_op>(&t, 2);
+    }
+    return ret;*/
+    return power(t, 2);
 }
+
 
 }

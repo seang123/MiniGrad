@@ -13,10 +13,15 @@ Tensor tanh(Tensor& t);
 Tensor exp(Tensor& t);
 
 // Power of 
-Tensor pow(Tensor& t);
+template <typename T>
+Tensor pow(Tensor&, T);
+Tensor power(Tensor&, int);
 
 // Square
 Tensor square(Tensor& t);
+
+// Sum
+//Tensor sum(Tensor& t);
 
 }
 

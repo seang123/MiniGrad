@@ -10,6 +10,8 @@
 #include <math.h>
 #include <random>
 #include <immintrin.h> // SIMD
+#include <intrin.h>
+#include <smmintrin.h>
 #include <numeric> // std::accumulate
 #include <thread> // std::thread
 #include <atomic>
@@ -132,13 +134,14 @@ Tensor::Tensor(Tensor&& lhs) noexcept
     : values(lhs.values)
     , grad(lhs.grad)
     , has_ctx(lhs.has_ctx)
+    , ctx(lhs.ctx)
+    , requires_grad_(lhs.requires_grad_)
     {
-    has_ctx = lhs.has_ctx;
-    ctx = lhs.ctx;
-    requires_grad_ = lhs.requires_grad_;
+        //std::cout << "Tensor::Tensor(Tensor&& lhs)\n";
 };
 
-// shallow copy
+// shallow copy 
+// TODO
 Tensor& Tensor::operator=(const Tensor& lhs) = default;
 
 /** Move
@@ -146,8 +149,11 @@ Tensor& Tensor::operator=(const Tensor& lhs) = default;
  * Old object may be empty afterwards (will probably be destroyed soon)
 */
 Tensor& Tensor::operator=(Tensor&& lhs){
-    std::cout << "operator=(Tensor&&)\n";
+    //std::cout << "operator=(Tensor&&)\n";
     values = std::move(lhs.values);
+    requires_grad_ = std::move(lhs.requires_grad_);
+    has_ctx = std::move(lhs.has_ctx);
+    ctx = std::move(lhs.ctx);
     return *this;
 }
 
@@ -331,6 +337,17 @@ Tensor Tensor::Uniform(float low, float high, const Shape& shape){
 
 Tensor Tensor::Uniform(const Shape& shape){
     return Uniform(0.f, 1.f, shape);
+}
+
+Tensor Tensor::Normal(float loc, float scale, const Shape& shape) {
+    // Create normal distribution
+    std::normal_distribution<> dist(loc, scale);
+    // Create random array
+    return CreateRandomArray(shape, dist, s_rand_engine);
+}
+
+Tensor Tensor::Normal(const Shape& shape) {
+    return Normal(0.f, 1.f, shape);
 }
 
 // ------------------------
@@ -830,6 +847,7 @@ public:
 
 
 Tensor operator+(const Tensor& lhs, const Tensor& rhs){
+    std::cout << "Tensor operator+(const Tensor&, const Tensor&)\n";
     if(lhs.shape() == rhs.shape()){
         Tensor ret(lhs.shape());
         // simple sum
@@ -885,26 +903,32 @@ Tensor add(Tensor& lhs, Tensor& rhs){
     return ret;
 }
 
+
 Tensor operator+(Tensor& lhs, Tensor& rhs){
     return add(lhs, rhs);
+}
+
+/**
+ * R-value references to allow chaining operations
+ * TODO: think about how this affects gradient tracking
+*/
+Tensor operator+(Tensor&& lhs, Tensor&& rhs){
+    Tensor a = std::move(lhs);
+    Tensor b = std::move(rhs);
+    return a + b;
+}
+Tensor operator+(Tensor& lhs, Tensor&& rhs){
+    Tensor b = std::move(rhs);
+    return lhs + b;
+}
+Tensor operator+(Tensor&& lhs, Tensor& rhs){
+    Tensor a = std::move(lhs);
+    return a + rhs;
 }
 
 
 // ----------- Subtraction ----------
 
-/*
-Tensor sub(const Tensor& lhs, const Tensor& rhs){
-    Tensor ret = ApplyDualOp(lhs, rhs, std::minus<float>());
-    if(lhs.requires_grad() || rhs.requires_grad()){
-        ret.requires_grad(true);
-        Tensor lhs_ = lhs;
-        Tensor rhs_ = rhs;
-        ret.ctx = std::make_shared<Sub_op>(&lhs_, &rhs_);
-        ret.has_ctx = true;
-    }
-    return ret;
-}
-*/
 class fast_sub_{
 public:
     __m128 operator()(const float* lhs, const float* rhs){
@@ -928,6 +952,7 @@ public:
         __m128 out = _mm_mul_ps(aa, bb);
         U u;
         u.v = out;
+        return u.a[0];
     }
 };
 
@@ -1034,6 +1059,52 @@ Tensor operator*(Tensor& lhs, Tensor& rhs){
     return mul(lhs, rhs);
 }
 
+Tensor operator*(float lhs, Tensor& rhs){
+    Tensor lhs_ (rhs.shape(), lhs);
+    return lhs_ * rhs;
+}
+
+Tensor operator*(Tensor& lhs, float rhs){
+    Tensor rhs_ (lhs.shape(), rhs);
+    return lhs * rhs_;
+}
+
+// ---------- Multiplication -----------
+
+template <class T> 
+struct divides {
+  T operator() (const T& x, const T& y) const {return x/y;}
+  typedef T first_argument_type;
+  typedef T second_argument_type;
+  typedef T result_type;
+};
+
+Tensor div(Tensor& lhs, Tensor& rhs){
+    //Tensor ret = ApplyDualOp(lhs, rhs, std::divides<float>());
+    Tensor ret = ApplyDualOp(lhs, rhs, divides<float>());
+    if(lhs.requires_grad() || rhs.requires_grad()){
+        ret.requires_grad(true);
+        ret.ctx = std::make_shared<div_op>(&lhs, &rhs);
+        ret.has_ctx = true;
+    }
+    return ret;
+}
+
+Tensor operator/(Tensor& lhs, Tensor& rhs){
+    return div(lhs, rhs);
+}
+
+Tensor operator/(Tensor& lhs, float rhs){
+    Tensor rhs_ (lhs.shape(), rhs);
+    return lhs / rhs_;
+}
+
+Tensor operator/(float lhs, Tensor& rhs){
+    Tensor lhs_ (rhs.shape(), lhs);
+    return lhs_ / rhs;
+}
+
+
 // ---------- Power -----------
 
 /**
@@ -1071,6 +1142,22 @@ Tensor Tensor::square() const {
     return ret;
 }
 
+// --------------------------- Sum ----------------------------------------
+
+// TODO: make this better
+Tensor Tensor::sum(){
+    float sum_ = 0.f;
+    for(size_t i = 0; i < this->size(); i++){
+        sum_ += (*this)[i];
+    }
+    Tensor ret (Shape{1}, sum_);
+    if(this->requires_grad()){
+        ret.requires_grad(true);
+        ret.has_ctx = this->has_ctx;
+        ret.ctx = this->ctx;
+    }
+    return ret;
+}
 
 // --------------------------- Dot product --------------------------------
 
@@ -1091,6 +1178,7 @@ static Tensor DotTensor1d(const Tensor& lhs, const Tensor& rhs) {
                                             std::plus<float>(), 0.f);
     return {sum};
 }
+
 
 /**
  * Computes dot product along columns
@@ -1562,11 +1650,6 @@ void _deepwalk(Tensor* node, std::set<Tensor* >& visited, std::vector<Tensor*>& 
     }
 }
 
-struct Graph{
-    std::set<Tensor*>visited;
-    std::vector<Tensor*>nodes;
-};
-
 /**
  * Topological sort of the operations tree
 */
@@ -1593,14 +1676,37 @@ void Tensor::backward(){
 
     //* Collect the operational graph
     Graph g = deepwalk();
+    this->ops_graph = g;
 
     //* Reverse the graph
     std::reverse(g.nodes.begin(), g.nodes.end());
+
+    /*for(Tensor* n: g.nodes){
+        std::cout << n->name << "\n";
+    }*/
 
     //for(auto& n : g.nodes){
     for(Tensor* n: g.nodes){
         if( n->has_ctx == true ){
             n->ctx->backward(n);
         }
+    }
+}
+
+/**
+ * Apply accumulated gradients to a tensors values
+ * Also removes the context information
+ * and zeros the drops the gradient
+ * UNTESTED
+*/
+void Tensor::apply_grad(float lr){
+    for(Tensor* n : this->ops_graph.nodes){
+        if(n->requires_grad()){
+            Tensor temp = lr * *n->grad;
+            *n = *n - temp;
+        }
+        n->has_ctx = false;
+        n->ctx = nullptr;
+        n->grad = nullptr;
     }
 }

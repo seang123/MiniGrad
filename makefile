@@ -1,20 +1,19 @@
 
 CXX = g++
 VER = -std=c++17
-LDFLAGS = $(VER) -static -Wall -Wconversion -Wpedantic -Wextra -O0 # -O3 # -Werror
+LDFLAGS = $(VER) -static -Wall -Wconversion -Wpedantic -Wextra -O3 -msse4.1 # -O3 # -Werror
 
 
 
 
 
 
-tests: tests.o tensor.o substance.o ops.o operations.o
-	$(CXX) $(LDFLAGS) -o test tests.o tensor.o substance.o ops.o operations.o
+tests: tests.o tensor.o substance.o ops.o operations.o nn.o
+	$(CXX) $(LDFLAGS) -o test tests.o tensor.o substance.o ops.o operations.o nn.o
 
 
-debug: main.o tensor.o substance.o ops.o operations.o
-	$(CXX) $(LDFLAGS) -o main main.o Tensor.o Substance.o Ops.o operations.o
-
+debug: main.o tensor.o substance.o ops.o operations.o nn.o
+	$(CXX) $(LDFLAGS) -o main main.o Tensor.o Substance.o Ops.o operations.o nn.o 
 
 
 main.o: main.cpp
@@ -48,3 +47,6 @@ ops.o: Ops.cpp Ops.h
 
 operations.o: Operations.cpp
 	$(CXX) -c $(LDFLAGS) Operations.cpp
+
+nn.o: nn.cpp nn.h
+	$(CXX) -c $(LDFLAGS) nn.cpp

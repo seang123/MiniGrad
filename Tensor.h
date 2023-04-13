@@ -18,7 +18,12 @@ using Index = std::vector<int>;
 class Op;
 class Add_op;
 class Sub_op;
-struct Graph;
+
+struct Graph{
+    std::set<Tensor*>visited;
+    std::vector<Tensor*>nodes;
+};
+
 
 // ----------- Float initialisers ---------------
 template <std::size_t D>
@@ -55,13 +60,14 @@ private:
 
     static std::random_device s_rand_seed;
     static std::mt19937 s_rand_engine;
+    Graph ops_graph;
 
 public:
     Tensor();
-    Tensor(std::vector<float>, bool req_grad=false); // array, array_size
-    Tensor(const InitShape& shape, bool req_grad=false);
-    Tensor(const Shape& shape, bool req_grad=false);
-    Tensor(const Shape& shape, float fill_v, bool req_grad=false);
+    Tensor(std::vector<float>, bool req_grad=true); // array, array_size
+    Tensor(const InitShape& shape, bool req_grad=true);
+    Tensor(const Shape& shape, bool req_grad=true);
+    Tensor(const Shape& shape, float fill_v, bool req_grad=true);
 
     Tensor(const Tensor&); // deep copy another tensor obj
     Tensor(Tensor&&) noexcept;
@@ -73,7 +79,7 @@ public:
     // gradients are themselves a tensor
     //Tensor* grad = nullptr;
     std::shared_ptr<Tensor> grad;
-    bool requires_grad_ = false;
+    bool requires_grad_ = true;
     void requires_grad(bool);
     bool requires_grad();
     bool requires_grad() const;
@@ -96,12 +102,15 @@ public:
     static void Seed(uint32_t);
     static Tensor Uniform(float, float, const Shape&);
     static Tensor Uniform(const Shape&);
+    static Tensor Normal(float loc = 0.f, float scale = 1.f,
+                          const Shape& shape = {1});
+    static Tensor Normal(const Shape& shape);
 
     //Iter begin();
     //Iter end();
 
     // Sum two tensors - return new tensor
-    Tensor sum(Tensor);
+    Tensor sum();
     // Add a scalar to a tensor
     void add(int);
     Tensor add(const Tensor& lhs, const Tensor& rhs);
@@ -144,6 +153,7 @@ public:
 
     // --- backwards ---
     void backward();
+    void apply_grad(float);
     //void deepwalk();
     Graph deepwalk();
 
@@ -238,6 +248,11 @@ Tensor operator+(Tensor& lhs, float rhs);
 Tensor operator-(Tensor& lhs, float rhs);
 Tensor operator*(Tensor& lhs, float rhs);
 Tensor operator/(Tensor& lhs, float rhs);
+
+// For temporary chaining -- ie. Tensor d = ((Tensor)a + (Tensor)b) + (Tensor)c as a+b will give a temporary rvalue-ref
+Tensor operator+(Tensor&& lhs, Tensor&& rhs);
+Tensor operator+(Tensor& lhs, Tensor&& rhs);
+Tensor operator+(Tensor&& lhs, Tensor& rhs);
 
 Tensor operator==(const Tensor lhs, const Tensor& rhs);
 
