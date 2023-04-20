@@ -119,6 +119,26 @@ def linear_layer():
   print(y.grad)
 
 
+def plot_polynomial():
+  a = -0.00243357
+  b = 0.853247
+  c = 0.000370452
+  d = -0.0928783
+
+  import matplotlib.pyplot as plt
+
+  x = np.linspace(-math.pi, math.pi, 2000)
+  y = np.sin(x)
+
+  f = lambda a, b, c, d, x: a + b*x + c*x**2 + d*x**3
+
+  y_pred = []
+  for i in range(len(x)):
+    y_pred.append( f(a, b, c, d, x[i]) )
+
+  plt.plot(y_pred)
+  plt.plot(y)
+  plt.show()
 
 def polynomial_example():
   dtype = torch.float
@@ -144,9 +164,11 @@ def polynomial_example():
   learning_rate = 1e-6
   loss_hist = []
   start_t = time.perf_counter()
+  x_3 = x ** 3
+  x_2 = x ** 2
   for t in range(2000):
       # Forward pass: compute predicted y using operations on Tensors.
-      y_pred = a + b * x + c * x ** 2 + d * x ** 3
+      y_pred = a + b * x + c * x_2 + d * x_3
 
       # Compute and print loss using operations on Tensors.
       # Now loss is a Tensor of shape (1,)
@@ -155,7 +177,7 @@ def polynomial_example():
       #if t % 100 == 99:
       #    print(t, '-', loss.item())
       #print("loss:", loss.item())
-      loss_hist.append(loss.item())
+      #loss_hist.append(loss.item())
 
       # Use autograd to compute the backward pass. This call will compute the
       # gradient of loss with respect to all Tensors with requires_grad=True.
@@ -182,31 +204,25 @@ def polynomial_example():
       
   end_t = time.perf_counter()
   print(f"time: {(end_t - start_t):.4f}")
-  print("final loss: ", loss_hist[-1])
+  print("final loss: ", loss.item())
 
 
 polynomial_example()
 
+start_t = time.monotonic()
+x = torch.tensor(np.random.uniform(size=(128, 784)))
+y = torch.tensor(np.random.uniform(size=(784, 4)))
+z = x @ y
+end_t = time.monotonic()
+print(f"dot: {(end_t - start_t):.4f}")
 
-def plot_polynomial():
-  a = -0.00243357
-  b = 0.853247
-  c = 0.000370452
-  d = -0.0928783
 
-  import matplotlib.pyplot as plt
+def compute_gflops():
+  time = 0.00012 # in seconds
+  # (n, m) * (m, p)  -> nm(2p - 1)
+  flops = 128 * 784 * (2 * 4 - 1);
+  flops = (1 / time) * flops
+  print(f"Gigaflops: {flops * 1e-9}")
+  return flops * 1e-9
 
-  x = np.linspace(-math.pi, math.pi, 2000)
-  y = np.sin(x)
-
-  f = lambda a, b, c, d, x: a + b*x + c*x**2 + d*x**3
-
-  y_pred = []
-  for i in range(len(x)):
-    y_pred.append( f(a, b, c, d, x[i]) )
-
-  plt.plot(y_pred)
-  plt.plot(y)
-  plt.show()
-
-plot_polynomial()
+compute_gflops()

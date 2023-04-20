@@ -4,6 +4,10 @@
 #include <algorithm>
 #include <math.h>
 #include <xmmintrin.h>
+#include <immintrin.h>
+#include <emmintrin.h>
+#include <x86intrin.h>
+#include <smmintrin.h>
 
 #define FastExpComputation
 
@@ -71,25 +75,52 @@ static float _tanh(T y){
 }
 
 
-template <typename T>
-static float _exp(T y){
-    return exp(y);
+/**
+ * Computes tanh using SIMD approximation method 4 values at a time
+*/
+Tensor tanh_simd(Tensor& t){
+    Tensor ret (t.shape());
+    auto&& ret_data = ret.data();
+    auto&& src_data = t.data();
+    // Simply apply all
+    for(size_t i = 0; i < t.size(); i+=4){
+        __m128 vals = _mm_load_ps(&src_data[i]);
+        __m128 a = BetterFastExpSse(2.f * vals);
+        __m128 out = _mm_div_ps(a - 1.f, a+1.f);
+        _mm_store_ps(&ret_data[i], out);
+    }
+    if(t.requires_grad()){
+        ret.requires_grad(true);
+        ret.has_ctx = true;
+        ret.ctx = std::make_shared<tanh_op>(&t);
+    }
+    return ret;
 }
 
 /**
  * Computes tanh on a given tensor and returns a new tensor
 */
 Tensor tanh(Tensor& t){
-    Tensor ret (t.shape());
-    ApplyOpSimple(ret, t, _tanh<float>);
 
-    if(t.requires_grad()){
-        ret.requires_grad(true);
-        ret.has_ctx = true;
-        ret.ctx = std::make_shared<tanh_op>(&t);
+    if( t.size() < 4){
+        // Single value SIMD - still faster than using math.h exp
+        Tensor ret (t.shape());
+        //ApplyOpSimple(ret, t, simple_tanh<float>);
+        ApplyOpSimple(ret, t, _tanh<float>);
+        if(t.requires_grad()){
+            ret.requires_grad(true);
+            ret.has_ctx = true;
+            ret.ctx = std::make_shared<tanh_op>(&t);
+        }
+        return ret;
+    } else{
+        return tanh_simd(t);
     }
+}
 
-    return ret;
+template <typename T>
+float _exp(T y){
+    return exp(y);
 }
 
 /**
@@ -97,7 +128,17 @@ Tensor tanh(Tensor& t){
 */
 Tensor exp(Tensor& t){
     Tensor ret (t.shape());
+#ifndef FastExpComputation
     ApplyOpSimple(ret, t, _exp<float>);
+#else
+    auto&& ret_data = ret.data();
+    auto&& src_data = t.data();
+    for(size_t i = 0; i < t.size(); i+=4){
+        __m128 vals = _mm_load_ps(&src_data[i]);
+        __m128 out = BetterFastExpSse(vals);
+        _mm_store_ps(&ret_data[i], out);
+    }
+#endif
 
     if(t.requires_grad()){
         ret.requires_grad(true);
@@ -146,17 +187,11 @@ Tensor power(Tensor& t, float p){
     return ret;
 }
 
+
 Tensor power(Tensor& t, int p){
-    Tensor ret (t.shape());
-    _pow<int> to_the_power(p);
-    ApplyOpSimple(ret, t, to_the_power);
-    if(t.requires_grad() == 1){
-        ret.requires_grad(true);
-        ret.has_ctx = true;
-        ret.ctx = std::make_shared<pow_op>(&t, p);
-    }
-    return ret;
+    return power(t, (float)p);
 }
+
 
 /**
  * Square the values in a tensor
@@ -169,7 +204,22 @@ Tensor square(Tensor& t){
         ret.ctx = std::make_shared<pow_op>(&t, 2);
     }
     return ret;*/
-    return power(t, 2);
+    //return power(t, 2);
+    Tensor ret (t.shape());
+    auto&& ret_data = ret.data();
+    auto&& src_data = t.data();
+    for(size_t i = 0; i < t.size(); i+=4){
+        __m128 a = _mm_load_ps(&src_data[i]);
+        __m128 b = _mm_load_ps(&src_data[i]);
+        __m128 out = _mm_mul_ps(a, b);
+        _mm_store_ps(&ret_data[i], out);
+    }
+    if(t.requires_grad() == true){
+        ret.requires_grad(true);
+        ret.has_ctx = true;
+        ret.ctx = std::make_shared<pow_op>(&t, 2);
+    }
+    return ret;
 }
 
 

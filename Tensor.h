@@ -135,6 +135,7 @@ public:
 
     // Overload index operator 
     float& operator[](const int);
+    float& operator[](const size_t);
     float& operator[](const Index&) const;
 
     operator float() const;
@@ -254,6 +255,8 @@ Tensor operator/(Tensor& lhs, float rhs);
 Tensor operator+(Tensor&& lhs, Tensor&& rhs);
 Tensor operator+(Tensor& lhs, Tensor&& rhs);
 Tensor operator+(Tensor&& lhs, Tensor& rhs);
+
+Tensor operator*(Tensor&& lhs, Tensor&& rhs);
 
 Tensor operator==(const Tensor lhs, const Tensor& rhs);
 

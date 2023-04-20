@@ -5,6 +5,9 @@
 /CMakeFiles/
 
 CMakeCache.txt
+*.json
+*.txt
+*.out
 
 
 # Prerequisites

@@ -15,7 +15,6 @@
 // So we need to reduce this to compute the gradient for the left parent
 // Note a tensors gradient should always have shape equal to its values
 
-class Tensor;
 
 Op::Op() = default;
 
@@ -32,6 +31,14 @@ Op::Op(Tensor* left, Tensor* right)
     parents.insert(right);
 }
 
+Op::Op(std::shared_ptr<Tensor> left, std::shared_ptr<Tensor> right)
+    : left(left.get())
+    , right(right.get())
+    {
+        parents.insert(left.get());
+        parents.insert(right.get());
+    }
+
 void Op::backward(const Tensor* out){
     throw std::runtime_error("Op.backward() not implemented!");
     //std::cout << "Op::backward()\n";
@@ -44,8 +51,9 @@ Tensor Op::forward(){
 
 // ------------------- Addition operator ---------------------
 
-Add_op::Add_op(Tensor* left, Tensor* right) 
+Add_op::Add_op(Tensor* self, Tensor* left, Tensor* right) 
     : Op(left, right)
+    , self(self)
     , left(left)
     , right(right)
     {
@@ -199,7 +207,8 @@ Tensor div_op::forward(){
 
 // ----------------- Multiplication ----------------------
 
-Mul_op::Mul_op(Tensor* left, Tensor* right)
+//Mul_op::Mul_op(Tensor* left, Tensor* right)
+Mul_op::Mul_op(Tensor * left, Tensor * right)
     : Op(left, right)
     , left(left)
     , right(right)
@@ -211,12 +220,16 @@ Mul_op::Mul_op(Tensor* left, Tensor* right)
 void Mul_op::backward(const Tensor* out){
     //* left.grad = right.values * out_grad
     //* right.grad = left.values * out_grad
-    if(left->requires_grad()){
-        Shape lhs_shape = left->shape();
+
+    Tensor * lhs = left;
+    Tensor * rhs = right;
+
+    if(lhs->requires_grad()){
+        Shape lhs_shape = lhs->shape();
         std::vector<int> axis_to_reduce;
-        left->grad = std::make_shared<Tensor>(left->shape(), 0.f);
-        Tensor temp = *right * *(out->grad);
-        left->grad = std::make_shared<Tensor>(lhs_shape, 0.f);
+        lhs->grad = std::make_shared<Tensor>(lhs->shape(), 0.f);
+        Tensor temp = *rhs * *(out->grad);
+        lhs->grad = std::make_shared<Tensor>(lhs_shape, 0.f);
         for(int i = 0; i < lhs_shape.size(); i++){
             if( lhs_shape[i] < temp.shape()[i] ){
                 axis_to_reduce.push_back(i);
@@ -225,14 +238,14 @@ void Mul_op::backward(const Tensor* out){
         if( axis_to_reduce.size() > 0 ){
             temp = Sum(temp, axis_to_reduce, false);
         }
-        *left->grad = *left->grad + temp;
-        assert(left->grad->shape() == left->shape());
+        *lhs->grad = *lhs->grad + temp;
+        assert(lhs->grad->shape() == lhs->shape());
     }
-    if(right->requires_grad()){
-        Shape rhs_shape = right->shape();
+    if(rhs->requires_grad()){
+        Shape rhs_shape = rhs->shape();
         std::vector<int> axis_to_reduce;
-        right->grad = std::make_shared<Tensor>(right->shape(), 0.f);
-        Tensor temp = *left * *(out->grad); 
+        rhs->grad = std::make_shared<Tensor>(rhs->shape(), 0.f);
+        Tensor temp = *lhs * *(out->grad); 
         for(int i = 0; i < rhs_shape.size(); i++){
             if( rhs_shape[i] < temp.shape()[i] ){
                 axis_to_reduce.push_back(i);
@@ -241,8 +254,8 @@ void Mul_op::backward(const Tensor* out){
         if( axis_to_reduce.size() > 0 ){
             temp = Sum(temp, axis_to_reduce, false);
         }
-        *right->grad = *right->grad + temp;
-        assert(right->grad->shape() == right->shape());
+        *rhs->grad = *rhs->grad + temp;
+        assert(rhs->grad->shape() == rhs->shape());
     }
 }
 
@@ -381,3 +394,60 @@ Tensor dot_op::forward(){
     throw std::runtime_error("dot_op::forward() -- Not implemented!");
 }
 
+
+// -------------------------------------------------------------- 
+
+Mul_op_r::Mul_op_r(std::shared_ptr<Tensor> left, std::shared_ptr<Tensor>  right)
+    : Op(left, right)
+    , left(left)
+    , right(right)
+    {
+    parents.insert(left);
+    parents.insert(right);
+}
+
+void Mul_op_r::backward(const Tensor* out){
+    //* left.grad = right.values * out_grad
+    //* right.grad = left.values * out_grad
+
+    Tensor * lhs = left.get();
+    Tensor * rhs = right.get();
+
+    if(lhs->requires_grad()){
+        Shape lhs_shape = lhs->shape();
+        std::vector<int> axis_to_reduce;
+        lhs->grad = std::make_shared<Tensor>(lhs->shape(), 0.f);
+        Tensor temp = *rhs * *(out->grad);
+        lhs->grad = std::make_shared<Tensor>(lhs_shape, 0.f);
+        for(int i = 0; i < lhs_shape.size(); i++){
+            if( lhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
+        }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *lhs->grad = *lhs->grad + temp;
+        assert(lhs->grad->shape() == lhs->shape());
+    }
+    if(rhs->requires_grad()){
+        Shape rhs_shape = rhs->shape();
+        std::vector<int> axis_to_reduce;
+        rhs->grad = std::make_shared<Tensor>(rhs->shape(), 0.f);
+        Tensor temp = *lhs * *(out->grad); 
+        for(int i = 0; i < rhs_shape.size(); i++){
+            if( rhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
+        }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *rhs->grad = *rhs->grad + temp;
+        assert(rhs->grad->shape() == rhs->shape());
+    }
+}
+
+Tensor Mul_op_r::forward(){
+    throw std::runtime_error("Mul_op::forward() -- Not implemented!");
+}

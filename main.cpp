@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cassert>
 #include <immintrin.h>
+#include <math.h>
 
 #include "Tensor.h"
 #include "Operations.h"
@@ -11,6 +12,7 @@
 //#define TINYNDARRAY_IMPLEMENTATION
 //#include "tinyndarray.h"
 //using tinyndarray::NdArray;
+using std::cout;
 
 template <typename DT = std::chrono::microseconds,
           typename ClockT = std::chrono::steady_clock>
@@ -35,7 +37,6 @@ public:
     }
 };
 
-using std::cout;
 
 void basic_test(){
 
@@ -104,10 +105,23 @@ void timing(){
     clock.toc();
     std::cout << ".backward(): " << clock.duration<std::chrono::microseconds>().count() << "\n";
 
+    std::cout << "----- tanh -----\n";
 
     Tensor tt = {1.f, 2.f, 3.f};
+    //Tensor tt = Tensor::Uniform(Shape{2000});
+    clock.tic();
     tt = Ops::tanh(tt);
-    cout << tt << "\n";
+    clock.toc();
+    std::cout << "tanh single value simd: " << clock.duration<std::chrono::microseconds>().count() << "\n";
+
+    tt = Tensor::Uniform(Shape{5000});
+    float first = tt[0];
+    clock.tic();
+    tt = Ops::tanh(tt);
+    clock.toc();
+    std::cout << "tanh multi simd: " << clock.duration<std::chrono::microseconds>().count() << "\n";
+
+    std::cout << "----- tanh end ------\n";
 
     Tensor::Seed(42);
     Tensor t_l = Tensor::Uniform(Shape{128, 784});
@@ -147,6 +161,15 @@ public:
     Tensor operator()(Tensor& x){
         return forward(x);
     }
+
+    std::vector<Tensor*> parameters(){
+        std::vector<Tensor*> params;
+        for( auto& m : {&l1, &l2, &l3}){
+            auto module_params = m->parameters();
+            params.insert(params.end(), module_params.begin(), module_params.end());
+        }
+        return params;
+    }
 };
 
 void myMLP(){
@@ -158,8 +181,6 @@ void myMLP(){
 
     out.backward();
 
-    //std::shared_ptr<Tensor> l1_w = net.l1.get_weights();
-    //cout << *l1_w << "\n";
 
     // Apply the gradients to the tensors
     out.apply_grad(0.001f);
@@ -184,7 +205,7 @@ void simple_example(){
     Tensor d = Tensor::Normal(Shape{1});
     d.name = 'd';
 
-    cout << a << " " << b << " " << c << " " << d << "\n";
+    cout << "start values: " << a << " " << b << " " << c << " " << d << "\n";
 
     Tensor x (Shape{2000});
     x.name = 'x';
@@ -194,7 +215,6 @@ void simple_example(){
     y.name = 'y';
     float v = -3.14f;
     float inter = (-1 * v * 2) / 2000;
-    std::cout << inter << "\n";
     for(int i = 0; i < 2000; i++){
         x[i] = v;
         y[i] = std::sin(v);
@@ -204,73 +224,75 @@ void simple_example(){
 
     Timer<> clock;
     clock.tic();
-
-    for(int i = 0; i < 3000; i++ ){
-        Tensor dx = Ops::power(x, 3); // 2000
-        dx.name = "dx";
+    int epochs = 2000;
+    Tensor dx = Ops::power(x, 3);
+    dx.requires_grad(false);
+    Tensor cx = Ops::square(x); 
+    cx.requires_grad(false);
+    for(int i = 0; i < epochs; i++ ){
+        //Tensor dx = Ops::power(x, 3); // 2000
         Tensor dx2 = dx * d; // 2000
-        dx2.name = "dx2";
-        Tensor cx = Ops::power(x, 2); // 2000
-        cx.name = "cx";
+        //Tensor cx = Ops::power(x, 2); // 2000
         Tensor cx2 = cx * c; // 2000
-        cx2.name = "cx2";
         Tensor bx = b * x;
-        bx.name = "bx";
         Tensor dc = dx2 + cx2;
-        dc.name = "dc";
         Tensor dcb = dc + bx;
-        dcb.name = "dcb";
         Tensor dcba = dcb + a;
-        dcba.name = "dcba";
 
         Tensor loss1 = dcba - y; // 2000
-        loss1.name = "loss1";
-        Tensor loss2 = Ops::power(loss1, 2); // 2000
-        loss2.name = "loss2";
+        Tensor loss2 = Ops::square(loss1); // 2000
         Tensor loss3 = loss2.sum(); // 1
-        loss3.name = "loss3";
 
-        if ( i % 2 == 0 ){
-            cout << "Epoch: " << i << " loss: " << loss3 << "\n";
-        }
         loss3.backward();
-        /*cout << "a: " << a << *a.grad << "\n";
-        cout << "b: " << b << *b.grad << "\n";
-        cout << "c: " << c << *c.grad << "\n";
-        cout << "d: " << d << *d.grad << "\n";
-        cout << "\n";*/
         loss3.apply_grad(0.000001f);
     }
-
     clock.toc();
 
-    std::cout << "time: " << clock.duration<std::chrono::milliseconds>().count() << "\n";
-
+    std::cout << "Epochs: " << epochs << "\n";
+    std::cout << "time: " << clock.duration<std::chrono::milliseconds>().count() << " (ms)\n";
 
     cout << "a: " << a << "\n";
     cout << "b: " << b << "\n";
     cout << "c: " << c << "\n";
     cout << "d: " << d << "\n";
-
 }
-
 
 int main()
 {
     //timing();
     //simd();
     //myMLP();
-    simple_example();
+    //simple_example();
 
-    /*Tensor a = {0.5f};
-    Tensor b  = Tensor::Uniform(Shape{2000});
-    b = b.reshape(1, 2000);
 
-    Tensor c = a * b;
-    c.backward();
+    /*
+    Timer<> clock;
+    Tensor tt = Tensor::Uniform(Shape{5000});
+    float first = tt[0];
+    clock.tic();
+    tt = Ops::tanh(tt);
+    clock.toc();
+    std::cout << "tanh multi simd: " << clock.duration<std::chrono::microseconds>().count() << "\n";
+    */
 
-    cout << "a: " << a << " " << *a.grad << "\n";*/
 
+    Tensor t1 = Tensor::Uniform(Shape{128, 784});
+    Tensor t2 = Tensor::Uniform(Shape{784, 4});
+
+    Timer<> clock;
+    clock.tic();
+    Tensor t3 = t1.dot(t2);
+    clock.toc();
+    std::cout << "dot prod: " << clock.duration<std::chrono::microseconds>().count() << " (us)\n";
+
+
+    Tensor a = {1.f, 2.f, 3.f};
+    Tensor b = {4.f, 5.f, 6.f};
+    Tensor c = {7.f, 8.f, 9.f};
+    Tensor d = {10.f, 11.f, 12.f};
+    Tensor out = (a + b) * (c + d);
+    out.backward();
+    std::cout << *a.grad << "\n";
 
     return 0;
 }

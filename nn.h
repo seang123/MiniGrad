@@ -27,11 +27,12 @@ class Module{
 public:
     Module();
     Module(int, int, bool);
+    ~Module();
 
     // A modules operator() should call forward()
     virtual Tensor forward(Tensor&);
     virtual Tensor operator()(Tensor&);
-
+    virtual std::vector<Tensor*> parameters();
 };
 
 
@@ -49,8 +50,8 @@ public:
 
     Tensor forward(Tensor&);
     Tensor operator()(Tensor&);
+    std::vector<Tensor*> parameters() override;
 
-    std::shared_ptr<Tensor> get_weights();
 };
 
 

@@ -5,7 +5,6 @@
 #include <vector>
 #include <memory>
 
-using InitShape = std::initializer_list<int>; //allows braced-list initlization - Tenor t = {1,2,3};
 using Shape = std::vector<int>;
 
 /*
@@ -23,7 +22,7 @@ public:
 
     Shape shape;
     size_t size;
-    std::shared_ptr<float> vals; // the raw data array - on the heap
+    alignas(32) std::shared_ptr<float> vals; // the raw data array - on the heap
 
 
     float* begin(){

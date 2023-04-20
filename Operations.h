@@ -14,7 +14,9 @@ Tensor exp(Tensor& t);
 
 // Power of 
 template <typename T>
-Tensor pow(Tensor&, T);
+Tensor pow(Tensor&, T p);
+
+Tensor power(Tensor&, float);
 Tensor power(Tensor&, int);
 
 // Square

@@ -11,19 +11,20 @@ using InitShape = std::initializer_list<int>; //allows braced-list initlization 
 using Shape = std::vector<int>;
 using Index = std::vector<int>;
 
-
 class Tensor;
 
 // ------------ Function ---------------------
 
 class Op{
 public:
+    Tensor* self;
     Tensor* left;
     Tensor* right;
     std::set<Tensor*> parents;
     //std::vector<Tensor*> parents;
     Op(Tensor*, Tensor*);
     Op(Tensor*);
+    Op(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>);
     Op();
     virtual Tensor forward();
     //virtual void backward(std::shared_ptr<Tensor> );
@@ -32,12 +33,13 @@ public:
 
 
 class Add_op : public Op{
+    Tensor * self;
     Tensor* left;
     Tensor* right;
     std::set<Tensor*> parents;
 public:
     //std::vector<Tensor*> parents;
-    Add_op(Tensor* left, Tensor* right);
+    Add_op(Tensor* self, Tensor* left, Tensor* right);
     Tensor forward();
     //void backward(std::shared_ptr<Tensor> );
     void backward(const Tensor*);
@@ -55,7 +57,6 @@ public:
     void backward(const Tensor*);
 };
 
-
 class Mul_op : public Op{
     Tensor* left;
     Tensor* right;
@@ -63,9 +64,20 @@ class Mul_op : public Op{
 public:
     Mul_op(Tensor* left, Tensor* right);
     Tensor forward();
-    //void backward(std::shared_ptr<Tensor>);
     void backward(const Tensor*);
 };
+
+class Mul_op_r : public Op{
+    std::shared_ptr<Tensor> left;
+    std::shared_ptr<Tensor> right;
+    //std::set<Tensor*> parents;
+    std::set<std::shared_ptr<Tensor>> parents;
+public:
+    Mul_op_r(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>);
+    Tensor forward();
+    void backward(const Tensor*);
+};
+
 
 class div_op : public Op{
     Tensor* left;
