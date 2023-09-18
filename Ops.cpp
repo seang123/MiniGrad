@@ -353,6 +353,7 @@ dot_op::dot_op(Tensor* left, Tensor* right)
 }
 
 /*
+    (n, m) * (m, p) -> (n, p)
     Y = (X^T)W + B
     dL/dW = (dL/dW ^ T) X
     dL/dX = (dL/dW) W
@@ -361,17 +362,20 @@ dot_op::dot_op(Tensor* left, Tensor* right)
     dL/dW = out->grad * left
     dL/dX = out->grad * right
 
-    out->grad is the upstream gradient which will be computed first in the operations chain
 
-    in:  [32, 3, 16] @ [16, 2]
-    out: [32, 3, 2]
-    out->grad: [32, 3, 2]  // (1)
-    right:     [16, 2]    //  (2) cannot multiply 1 and 2
+    in:  [32, 16] @ [16, 2]
+    out: [32, 2]
+    out->grad: [32, 2]    // (1)
+    jacobians = [32, 2, 32, 16] [32, 2, 16, 2]
+    left:      [32, 16]   // (2)
+    right:     [16, 2]    //  (3) cannot multiply 1 and 2
 
 
     in:  [2, 2] @ [2, 3]
     out: [2, 3]
     out->grad: [2, 3]
+    left -> out->grad * right -> [2, 3] * [2, 3]
+    right -> out->grad * left -> [2, 2] * [2, 3]
 */
 void dot_op::backward(const Tensor* out){
     if(left->requires_grad()){
@@ -395,9 +399,9 @@ Tensor dot_op::forward(){
 }
 
 
-// -------------------------------------------------------------- 
+// --------------------------- Temporary Mul op----------------------------------- 
 
-Mul_op_r::Mul_op_r(std::shared_ptr<Tensor> left, std::shared_ptr<Tensor>  right)
+Mul_op_t::Mul_op_t(std::shared_ptr<Tensor> left, std::shared_ptr<Tensor>  right)
     : Op(left, right)
     , left(left)
     , right(right)
@@ -406,7 +410,7 @@ Mul_op_r::Mul_op_r(std::shared_ptr<Tensor> left, std::shared_ptr<Tensor>  right)
     parents.insert(right);
 }
 
-void Mul_op_r::backward(const Tensor* out){
+void Mul_op_t::backward(const Tensor* out){
     //* left.grad = right.values * out_grad
     //* right.grad = left.values * out_grad
 
@@ -448,6 +452,59 @@ void Mul_op_r::backward(const Tensor* out){
     }
 }
 
-Tensor Mul_op_r::forward(){
+Tensor Mul_op_t::forward(){
     throw std::runtime_error("Mul_op::forward() -- Not implemented!");
+}
+
+// -------- Temporary add op ----------
+
+Add_op_t::Add_op_t(std::shared_ptr<Tensor> left, std::shared_ptr<Tensor>  right)
+    : Op(left, right)
+    , left(left)
+    , right(right)
+    {
+    parents.insert(left);
+    parents.insert(right);
+}
+
+/**
+ * Compute the gradients for the parents of a tensor
+*/
+void Add_op_t::backward(const Tensor* out){
+    if(left->requires_grad()){
+        Shape lhs_shape = left->shape();
+        left->grad = std::make_shared<Tensor>(lhs_shape, 0.f);
+        std::vector<int> axis_to_reduce;
+        Tensor temp = *out->grad;
+        for(int i = 0; i < lhs_shape.size(); i++){
+            if( lhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
+        }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *left->grad = *left->grad + temp;
+        assert(left->grad->shape() == left->shape());
+    }
+    if(right->requires_grad()){
+        Shape rhs_shape = right->shape();
+        right->grad = std::make_shared<Tensor>(rhs_shape, 0.f);
+        std::vector<int> axis_to_reduce;
+        Tensor temp = *out->grad;
+        for(int i = 0; i < rhs_shape.size(); i++){
+            if( rhs_shape[i] < temp.shape()[i] ){
+                axis_to_reduce.push_back(i);
+            }
+        }
+        if( axis_to_reduce.size() > 0 ){
+            temp = Sum(temp, axis_to_reduce, false);
+        }
+        *right->grad = *right->grad + temp;
+        assert(right->grad->shape() == right->shape());
+    }
+}
+
+Tensor Add_op_t::forward(){
+    throw std::runtime_error("Add_op::forward() -- Not implemented!");
 }

@@ -209,9 +209,9 @@ def polynomial_example():
 
 polynomial_example()
 
-start_t = time.monotonic()
 x = torch.tensor(np.random.uniform(size=(128, 784)))
 y = torch.tensor(np.random.uniform(size=(784, 4)))
+start_t = time.monotonic()
 z = x @ y
 end_t = time.monotonic()
 print(f"dot: {(end_t - start_t):.4f}")
@@ -226,3 +226,26 @@ def compute_gflops():
   return flops * 1e-9
 
 compute_gflops()
+
+
+def f(x, w):
+  return x @ w
+
+x = torch.tensor(np.random.uniform(size=(4, 2)), requires_grad=True)
+w = torch.tensor(np.random.uniform(size=(2, 3)), requires_grad=True)
+jac = torch.autograd.functional.jacobian(f, (x, w), create_graph = True)
+out = f(x, w)
+out.backward(torch.tensor(np.ones((4, 3))))
+print("out:", out.shape)
+print(jac[0].shape)
+print(jac[1].shape)
+
+print(x)
+print(w)
+print(jac[0])
+
+print("-----------")
+print(jac[0].sum(axis=(0,1)))
+print(x.grad)
+print(jac[1].sum(axis=(0,1)))
+print(w.grad)

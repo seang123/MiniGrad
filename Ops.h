@@ -67,16 +67,6 @@ public:
     void backward(const Tensor*);
 };
 
-class Mul_op_r : public Op{
-    std::shared_ptr<Tensor> left;
-    std::shared_ptr<Tensor> right;
-    //std::set<Tensor*> parents;
-    std::set<std::shared_ptr<Tensor>> parents;
-public:
-    Mul_op_r(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>);
-    Tensor forward();
-    void backward(const Tensor*);
-};
 
 
 class div_op : public Op{
@@ -131,5 +121,29 @@ public:
     void backward(const Tensor*);
 };
 
+
+// ---------------- Temporary op's -------------------
+
+class Add_op_t : public Op{
+    std::shared_ptr<Tensor> left;
+    std::shared_ptr<Tensor> right;
+    //std::set<Tensor*> parents;
+    std::set<std::shared_ptr<Tensor>> parents;
+public:
+    Add_op_t(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>);
+    Tensor forward();
+    void backward(const Tensor*);
+};
+
+class Mul_op_t : public Op{
+    std::shared_ptr<Tensor> left;
+    std::shared_ptr<Tensor> right;
+    //std::set<Tensor*> parents;
+    std::set<std::shared_ptr<Tensor>> parents;
+public:
+    Mul_op_t(std::shared_ptr<Tensor>, std::shared_ptr<Tensor>);
+    Tensor forward();
+    void backward(const Tensor*);
+};
 
 #endif

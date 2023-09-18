@@ -11,12 +11,12 @@ The ndarray implementation is based on work from: https://github.com/takiyu/tiny
 
 Compile with makefile or:
 
-    g++ -std=c++17 -static main.cpp Tensor.cpp Substance.cpp Ops.cpp Operations.cpp
+    g++ -std=c++17 -static -msse4.1 main.cpp Tensor.cpp Substance.cpp Ops.cpp Operations.cpp nn.cpp
 
 For wsl:
 
-    g++ -pthread -std=c++17 -c main.cpp Tensor.cpp Substance.cpp Ops.cpp Operations.cpp nn.o
-    g++ -pthread -std=c++17 -o main.o tensor.o substance.o ops.o operations.o nn.o
+    g++ -pthread -std=c++17 -msse4.1 -c main.cpp Tensor.cpp Substance.cpp Ops.cpp Operations.cpp nn.o
+    g++ -pthread -std=c++17 -msse4.1 -o main.o tensor.o substance.o ops.o operations.o nn.o
 
 ---
 
@@ -32,7 +32,7 @@ Tensor out = t1 * t2;
 // Backwards pass
 out.backward();
 
-// Get the gradients (stored as a tensor obj)
+// Get the gradients (stored as a shared_ptr<Tensor>)
 std::cout << *t1.grad << "\n";
 
 ```

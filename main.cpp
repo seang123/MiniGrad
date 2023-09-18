@@ -257,6 +257,21 @@ void simple_example(){
     cout << "d: " << d << "\n";
 }
 
+void compute_flops(long long time, Shape a, Shape b){
+    // Compute flops for two tensors dot product operation
+    // (n, m) * (m, p)  -> nm(2p - 1)
+    float n_ops = 0.f;
+    if (a.size() == 2){
+        n_ops = a[0] * a[1] * (2 * b[1] - 1);
+    } else if( a.size() == 3){
+        n_ops = a[0] * (a[1] * a[2] * (2 * b[2] - 1));
+    }
+    float time_seconds = time / 1000000.f;
+    float flops = (1 / time_seconds) * n_ops;
+    std::cout << "flops: " << flops << "\n";
+    std::cout << "Giga-flops: " << (flops * 1e-9) << "\n";
+}
+
 int main()
 {
     //timing();
@@ -275,24 +290,36 @@ int main()
     std::cout << "tanh multi simd: " << clock.duration<std::chrono::microseconds>().count() << "\n";
     */
 
-
+    Tensor::SetNumWorkers(2);
+    Timer<> clock;
+    clock.tic();
     Tensor t1 = Tensor::Uniform(Shape{128, 784});
     Tensor t2 = Tensor::Uniform(Shape{784, 4});
+    clock.toc();
+    std::cout << "dot prod init: " << clock.duration<std::chrono::microseconds>().count() << " (us)\n";
 
-    Timer<> clock;
     clock.tic();
     Tensor t3 = t1.dot(t2);
     clock.toc();
-    std::cout << "dot prod: " << clock.duration<std::chrono::microseconds>().count() << " (us)\n";
+    long long time = clock.duration<std::chrono::microseconds>().count();
+    std::cout << "2D dot prod: " << clock.duration<std::chrono::microseconds>().count() << " (us)\n";
+    compute_flops(time, Shape{128, 784}, Shape{128, 4});
 
+    /// 3-D tensor 
+    t1 = Tensor::Uniform(Shape{32, 128, 784});
+    t2 = Tensor::Uniform(Shape{32, 784, 4});
+    clock.tic();
+    Tensor t31 = t1.dot(t2);
+    clock.toc();
+    time = clock.duration<std::chrono::microseconds>().count();
 
-    Tensor a = {1.f, 2.f, 3.f};
-    Tensor b = {4.f, 5.f, 6.f};
-    Tensor c = {7.f, 8.f, 9.f};
-    Tensor d = {10.f, 11.f, 12.f};
-    Tensor out = (a + b) * (c + d);
-    out.backward();
-    std::cout << *a.grad << "\n";
+    /// Inner product
+    t1 = Tensor::Uniform(Shape{2000});
+    t2 = Tensor::Uniform(Shape{2000});
+    clock.tic();
+    Tensor t32 = t1.dot(t2);
+    clock.toc();
+    std::cout << "inner prod: " << clock.duration<std::chrono::microseconds>().count() << " (us)\n";
 
     return 0;
 }

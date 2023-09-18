@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iostream>
 #include <iterator>
 #include <stdexcept>
@@ -72,6 +73,43 @@ static void GetParallelParams(int size, int& n_workers, int& n_batch,
     n_workers = std::min(n_workers, batch_size);
 }
 
+template <typename F>
+void RunParallel(int size, F op) {
+    // Decide parallelization parameters
+    int n_workers = -1, n_batch = -1, batch_size = -1;
+    GetParallelParams(size, n_workers, n_batch, batch_size);
+
+    if (n_workers <= 1) {
+        // Single execution
+        for (int i = 0; i < size; i++) {
+            // Operation
+            op(i);
+        }
+    } else {
+        // Parallel execution
+        std::atomic<int> next_batch(0);
+        std::vector<std::thread> workers(static_cast<size_t>(n_workers));
+        for (auto&& worker : workers) {
+            worker = std::thread([ =, &next_batch ]() noexcept {
+                int batch_cnt = 0;
+                while ((batch_cnt = next_batch++) < n_batch) {
+                    for (int i = 0; i < batch_size; i++) {
+                        const int idx = batch_size * batch_cnt + i;
+                        if (size <= idx) {
+                            break;
+                        }
+                        // Operation
+                        op(idx);
+                    }
+                }
+            });
+        }
+        for (auto&& worker : workers) {
+            worker.join();
+        }
+    }
+}
+
 template <typename F, typename R>
 float RunParallelWithReduce(int size, F op, R reduce, float init_v) {
     // Decide parallelization parameters
@@ -137,9 +175,9 @@ Tensor::Tensor(const Tensor& lhs) = default;
 Tensor::Tensor(Tensor&& lhs) noexcept 
     : values(lhs.values)
     , grad(lhs.grad)
-    , has_ctx(lhs.has_ctx)
-    , ctx(lhs.ctx)
     , requires_grad_(lhs.requires_grad_)
+    , ctx(lhs.ctx)
+    , has_ctx(lhs.has_ctx)
     { 
         //std::cout << "Tensor::Tensor(Tensor&& lhs)\n"; 
 };
@@ -153,9 +191,10 @@ Tensor& Tensor::operator=(const Tensor& lhs) = default;
 */
 Tensor& Tensor::operator=(Tensor&& lhs){
     values = lhs.values;
+    grad = lhs.grad;
     requires_grad_ = lhs.requires_grad_;
-    has_ctx = lhs.has_ctx;
     ctx = lhs.ctx;
+    has_ctx = lhs.has_ctx;
     return *this;
 }
 
@@ -456,6 +495,7 @@ size_t Tensor::ndim() const{
 */
 void fillN(float* iter, const int n, float fill_v){
     runOp(n, [&](int i){ iter[i] = fill_v; });
+    //RunParallel(n, [&](int i){ iter[i] = fill_v; });
 };
 
 /** 
@@ -1108,28 +1148,22 @@ Tensor add(Tensor& lhs, Tensor& rhs){
     return ret;
 }
 
+Tensor operator+(Tensor&& lhs, Tensor&& rhs){
+    std::shared_ptr<Tensor> lhs_ = std::make_shared<Tensor>(lhs);
+    std::shared_ptr<Tensor> rhs_ = std::make_shared<Tensor>(rhs);
+    Tensor ret = ApplyDualOp(lhs, rhs, std::plus<float>());
+    ret.requires_grad(false);
+    if(lhs.requires_grad() || rhs.requires_grad()){
+        ret.requires_grad(true);
+        ret.ctx = std::make_shared<Add_op_t>(lhs_, rhs_);
+        ret.has_ctx = true;
+    }
+    return ret;
+}
+
 
 Tensor operator+(Tensor& lhs, Tensor& rhs){
     return add(lhs, rhs);
-}
-
-/**
- * R-value references to allow chaining operations
- * TODO: think about how this affects gradient tracking
-*/
-Tensor operator+(Tensor&& lhs, Tensor&& rhs){
-    /*Tensor a = std::move(lhs);
-    Tensor b = std::move(rhs);
-    return a + b;*/
-    Tensor ret = ApplyDualOp(lhs, rhs, std::plus<float>());
-    ret.requires_grad(false);
-    if(lhs.requires_grad() || rhs.requires_grad()){ 
-        ret.requires_grad(true); 
-        //* The output stores referenecs to the parent tensors as well as what operation produced it
-        ret.ctx = std::make_shared<Add_op>(&ret, &lhs, &rhs);
-        ret.has_ctx = true;
-    };
-    return ret;
 }
 
 Tensor operator+(Tensor& lhs, Tensor&& rhs){
@@ -1255,17 +1289,13 @@ Tensor mul(Tensor& lhs, Tensor& rhs){
 }
 
 Tensor operator*(Tensor&& lhs, Tensor&& rhs){
-    std::cout << "operator*(Tensor&&, Tensor&&)\n";
-    //throw std:: runtime_error("Not working!");
     std::shared_ptr<Tensor> lhs_ = std::make_shared<Tensor>(lhs);
     std::shared_ptr<Tensor> rhs_ = std::make_shared<Tensor>(rhs);
-    lhs_->name = "lhs_ temp";
-    rhs_->name = "rhs_ temp";
     Tensor ret = ApplyDualOp(lhs, rhs, std::multiplies<float>());
     ret.requires_grad(false);
     if(lhs.requires_grad() || rhs.requires_grad()){
         ret.requires_grad(true);
-        ret.ctx = std::make_shared<Mul_op_r>(lhs_, rhs_);
+        ret.ctx = std::make_shared<Mul_op_t>(lhs_, rhs_);
         ret.has_ctx = true;
     }
     return ret;
@@ -1327,11 +1357,10 @@ Tensor operator/(float lhs, Tensor& rhs){
 /**
  * A functor for computing the power of
 */
-template <typename T>
 class _pow{
-    T p = 0;
+    float p = 0;
 public:
-    _pow(T p){
+    _pow(float p){
         this->p = p;
     }
     float operator()(float b){
@@ -1344,7 +1373,7 @@ public:
 */
 Tensor Tensor::square(){
     Tensor ret (this->shape());
-    _pow<int> _square(2);
+    _pow _square(2.f);
     ApplyOpSimple(ret, *this, _square);
     return ret;
 }
@@ -1354,7 +1383,7 @@ Tensor Tensor::square(){
 */
 Tensor Tensor::square() const {
     Tensor ret (this->shape());
-    _pow<int> _square(2);
+    _pow _square(2.f);
     ApplyOpSimple(ret, *this, _square);
     return ret;
 }
@@ -1391,8 +1420,30 @@ static Tensor DotTensor1d(Tensor& lhs, Tensor& rhs) {
     auto&& r_data = rhs.data();
     auto&& op = [&](int i) { return l_data[i] * r_data[i]; };
     // Run in parallel
-    const float sum = RunParallelWithReduce(static_cast<int>(size), op,
-                                            std::plus<float>(), 0.f);
+    //const float sum = RunParallelWithReduce(static_cast<int>(size), op,
+    //                                        std::plus<float>(), 0.f);
+    //return {sum};
+
+    if (((uintptr_t)l_data % 16u) != 0){
+        throw std::runtime_error("Data not alligned properly for SIMD");
+    }
+
+    size_t nr_slices = size % 4;
+
+    float * temp = new float[size];
+    float sum = 0.f;
+    float temp_store[4];
+    int i = 0;
+    for(; i < nr_slices; i+=4){
+        __m128 a = _mm_load_ps(&l_data[i]);
+        __m128 b = _mm_load_ps(&r_data[i]);
+        __m128 c = _mm_mul_ps(a, b);
+        _mm_store_ps(&temp_store[i], c);
+        sum = sum + temp_store[0] + temp_store[1] + temp_store[2] + temp_store[3];
+    }
+    for(; i < size; i++){
+        sum += l_data[i] * r_data[i];
+    }
     return {sum};
 }
 
@@ -1427,7 +1478,7 @@ static void DotTensor1d2dImplRowMajor(
 ){
     int r_idx;
     float sum;
-    /*for( int col_cnt = 0; col_cnt < n_col; col_cnt++ ){
+    for( int col_cnt = 0; col_cnt < n_col; col_cnt++ ){
         sum = 0.f;
         r_idx = col_cnt;
         for( int l_idx = 0; l_idx < n_contract; l_idx++ ){
@@ -1435,18 +1486,20 @@ static void DotTensor1d2dImplRowMajor(
             r_idx += n_col;
         }
         ret_data[col_cnt] = sum;
-    }*/
+    }
+    /*__m128 sum_vec, l_vec, r_vec;
     for (int i = 0; i < n_col; i += 4) {
-        __m128 sum_vec = _mm_setzero_ps();
+        sum_vec = _mm_setzero_ps();
         int r_idx = i;
         for (int j = 0; j < n_contract; j++) {
-            __m128 l_vec = _mm_set1_ps(l_data[j]);
-            __m128 r_vec = _mm_loadu_ps(&r_data[r_idx]);
+            l_vec = _mm_set1_ps(l_data[j]);
+            //r_vec = _mm_loadu_ps(&r_data[r_idx]);
+            r_vec = _mm_load_ps(&r_data[r_idx]);
             sum_vec = _mm_add_ps(sum_vec, _mm_mul_ps(l_vec, r_vec));
             r_idx += n_col;
         }
         _mm_storeu_ps(&ret_data[i], sum_vec);
-    }
+    }*/
 }
 
 /**
@@ -1457,8 +1510,10 @@ static auto SelectDot1d2dOp(const Shape& l_shape, const Shape& r_shape){
     const int left = l_shape.end()[-1];
     const int right = r_shape.end()[-2] * r_shape.end()[-1];
     if( left * Tensor::DOT_CACHE_SCALE < right){
+        std::cout << "Col Major\n";
         return DotTensor1d2dImplColMajor;
     } else{
+        std::cout << "Row Major\n";
         return DotTensor1d2dImplRowMajor;
     }
 }
@@ -1472,11 +1527,13 @@ void DotTensorNdMdImpl(
     const float* l_data,
     const float* r_data,
     const int n_l, const int n_r,
-    const int ret_step, const int l_step, const int r_step, F1d2d op_1d2d
+    const int ret_step, 
+    const int l_step, 
+    const int r_step, F1d2d op_1d2d
 ){
-    const int& n_contract = l_step;
-    const int& n_col = ret_step;
-    const int& ret_idx_base = n_r;
+    const int& n_contract = l_step; // last dim of left tensor
+    const int& n_col = ret_step; // last dim of right tensor
+    const int& ret_idx_base = n_r; 
 
     int l_idx = 0;
     int ret_idx0 = 0;
@@ -1521,6 +1578,13 @@ static Tensor DotTensorNdMd(Tensor& lhs, Tensor& rhs){
     const int n_r = static_cast<int>(rhs.size()) / r_step; // nr. of steps we'll have to do on rhs
 
     DotTensorNdMdImpl(ret.data(), lhs.data(), rhs.data(), n_l, n_r, ret_step, l_step, r_step, SelectDot1d2dOp(l_shape, r_shape));
+
+    ret.requires_grad(false);
+    if(lhs.requires_grad() || rhs.requires_grad()){
+        ret.requires_grad(true);
+        ret.ctx = std::make_shared<dot_op>(&lhs, &rhs);
+        ret.has_ctx = true;
+    }
     return ret;
 }
 
@@ -1532,11 +1596,12 @@ static Tensor DotTensor(Tensor& lhs, Tensor& rhs) {
         throw std::runtime_error("Dot product of empty array");
     } else if (lhs.size() == 1) {
         // Simple multiply (left)
-        // TODO: is the static_cast<float> necessary?
-        return static_cast<float>(lhs) * rhs;
+        //return static_cast<float>(lhs) * rhs;
+        return lhs * rhs;
     } else if (rhs.size() == 1) {
         // Simple multiply (right)
-        return lhs * static_cast<float>(rhs);
+        //return lhs * static_cast<float>(rhs);
+        return lhs * rhs;
     } else if (l_shape.size() == 1 && r_shape.size() == 1) {
         // Inner product of vector (1D, 1D)
         return DotTensor1d(lhs, rhs);
@@ -1553,14 +1618,7 @@ static Tensor DotTensor(Tensor& lhs, Tensor& rhs) {
 }
 
 Tensor Tensor::dot(Tensor& other){
-    //return DotTensor(*this, other);
-    Tensor ret = DotTensor(*this, other);
-    if(this->requires_grad() || other.requires_grad()){
-        ret.requires_grad(true);
-        ret.has_ctx = true;
-        ret.ctx = std::make_shared<dot_op>(this, &other);
-    }
-    return ret;
+    return DotTensor(*this, other);
 }
 
 // --------------------------- Print tensor --------------------------------
@@ -1726,8 +1784,8 @@ static void ChangeTensorView(float* ret_data,
                               const float* src_data, size_t size,
                               ViewF view_func) {
     // Copy under view conversion function
-    for(int src_idx = 0; src_idx < size; src_idx++){
-        const int ret_idx = view_func(src_idx);
+    for(size_t src_idx = 0; src_idx < size; src_idx++){
+        const int ret_idx = view_func((int)src_idx);
         ret_data[ret_idx] = src_data[src_idx];
     }
 }
@@ -1918,12 +1976,8 @@ void Tensor::backward(){
         std::cout << n->name << "\n";
     }*/
 
-    std::cout << "Nr. nodes: " << g.nodes.size() << "\n";
-
-    //for(auto& n : g.nodes){
     for(Tensor* n: g.nodes){
         if( n->has_ctx == true ){
-            //std::cout << "calling backward() for " << n->name << "\n";
             n->ctx->backward(n);
         }
     }
